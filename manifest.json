@@ -3,28 +3,16 @@
   "name": "React Story Facebook",
   "description": "React Story Facebook",
   "version": "1.0.0",
-  "icons": {
-  },
+  "icons": {},
   "background": {
-    "scripts": [
-      "background.js"
-    ]
+    "scripts": ["background.js"]
   },
   "content_scripts": [
     {
-      "matches": [
-        "https://www.facebook.com/*"
-      ],
-      "css": [
-        "styles.css"
-      ]
+      "matches": ["https://www.facebook.com/*"],
+      "css": ["styles.css"]
     }
   ],
-  "web_accessible_resources": [
-    "db/emoji.json"
-  ],
-  "permissions": [
-    "tabs",
-    "https://www.facebook.com/*"
-  ]
+  "web_accessible_resources": ["db/emoji.json"],
+  "permissions": ["tabs", "https://www.facebook.com/*"]
 }

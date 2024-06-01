@@ -60,6 +60,7 @@
     align-items: center;
     font-size: 30px;
     cursor: pointer;
+    border-radius: 20%;
 }
 
 .emoji:hover {

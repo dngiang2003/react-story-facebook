@@ -112,7 +112,7 @@ function reactStory(user_id, fb_dtsg, story_id, message) {
       });
       const res = await response.json();
       if (res.errors) return reject(res);
-      alert(`Gửi react ${message} thành công`);
+      alert(`Sent react ${message} successfully `);
       resolve(res);
     } catch (error) {
       reject(error);

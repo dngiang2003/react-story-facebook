@@ -594,5 +594,105 @@
   {
     "url": "https://emojipedia.org/bomb/",
     "value": "💣"
+  },
+  {
+    "url": "https://emojipedia.org/rocket",
+    "value": "🚀"
+  },
+  {
+    "url": "https://emojipedia.org/moai",
+    "value": "🗿"
+  },
+  {
+    "url": "https://emojipedia.org/asterisk",
+    "value": "✳️"
+  },
+  {
+    "url": "https://emojipedia.org/star",
+    "value": "⭐"
+  },
+  {
+    "url": "https://emojipedia.org/star2",
+    "value": "🌟"
+  },
+  {
+    "url": "https://emojipedia.org/four-leaf-clover",
+    "value": "🍀"
+  },
+  {
+    "url": "https://emojipedia.org/herb",
+    "value": "🌿"
+  },
+  {
+    "url": "https://emojipedia.org/seedling",
+    "value": "🌱"
+  },
+  {
+    "url": "https://emojipedia.org/party-popper",
+    "value": "🎉"
+  },
+  {
+    "url": "https://emojipedia.org/birthday-cake",
+    "value": "🎂"
+  },
+  {
+    "url": "https://emojipedia.org/partying-face",
+    "value": "🥳"
+  },
+  {
+    "url": "https://emojipedia.org/sparkles",
+    "value": "✨"
+  },
+  {
+    "url": "https://emojipedia.org/flexed-biceps",
+    "value": "💪"
+  },
+  {
+    "url": "https://emojipedia.org/blossom",
+    "value": "🌼"
+  },
+  {
+    "url": "https://emojipedia.org/sunflower",
+    "value": "🌻"
+  },
+  {
+    "url": "https://emojipedia.org/hibiscus",
+    "value": "🌺"
+  },
+  {
+    "url": "https://emojipedia.org/cherry-blossom",
+    "value": "🌸"
+  },
+  {
+    "url": "https://emojipedia.org/tulip",
+    "value": "🌷"
+  },
+  {
+    "url": "https://emojipedia.org/rose",
+    "value": "🌹"
+  },
+  {
+    "url": "https://emojipedia.org/heart-hands",
+    "value": "🫶"
+  },
+  {
+    "url": "https://emojipedia.org/spouting-whale",
+    "value": "🐳"
+  },
+  {
+    "url": "https://emojipedia.org/whale",
+    "value": "🐋"
+  },
+  {
+    "url": "https://emojipedia.org/bug",
+    "value": "🐛"
+  },
+  {
+    "url": "https://emojipedia.org/snail/",
+    "value": "🍃"
+  },
+  {
+    "url": "https://emojipedia.org/trophy/",
+    "value": "🎖️"
   }
 ]

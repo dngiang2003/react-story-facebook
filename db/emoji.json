@@ -694,5 +694,29 @@
   {
     "url": "https://emojipedia.org/trophy/",
     "value": "🎖️"
+  },
+  {
+    "url": "https://emojipedia.org/graduation-cap",
+    "value": "🎓"
+  },
+  {
+    "url": "https://emojipedia.org/clinking-beer-mugs",
+    "value": "🍻"
+  },
+  {
+    "url": "https://emojipedia.org/hand-with-index-finger-and-thumb-crossed",
+    "value": "🫰"
+  },
+  {
+    "url": "https://emojipedia.org/heart-on-fire",
+    "value": "❤️‍🔥"
+  },
+  {
+    "url": "https://emojipedia.org/fire",
+    "value": "🔥"
+  },
+  {
+    "url": "https://emojipedia.org/fish",
+    "value": "🐟"
   }
 ]

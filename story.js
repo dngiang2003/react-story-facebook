@@ -1,5 +1,5 @@
 (async () => {
-  if (document.getElementsByClassName("btn-react").length > 0) return;
+  if (document.getElementsByClassName("react-container").length > 0) return;
   try {
     const emojiJson = await fetch(chrome.extension.getURL("/db/emoji.json"));
     const EMOJI_LIST = await emojiJson.json();
@@ -112,7 +112,7 @@ function reactStory(user_id, fb_dtsg, story_id, message) {
       });
       const res = await response.json();
       if (res.errors) return reject(res);
-      alert(`Sent react ${message} successfully `);
+      alert(`Sent react ${message} successfully`);
       resolve(res);
     } catch (error) {
       reject(error);

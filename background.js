@@ -1,8 +1,2 @@
-chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
-  if (
-    changeInfo.status === "complete" &&
-    tab.url.includes("https://www.facebook.com/stories")
-  ) {
-    chrome.tabs.executeScript(null, { file: "story.js" });
-  }
-});
+// Không cần thực hiện bất kỳ hành động nào trong background script
+// vì chúng ta đã chuyển sang sử dụng content_scripts

@@ -1,18 +1,25 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "React Story Facebook",
   "description": "React Story Facebook",
   "version": "1.0.0",
   "icons": {},
   "background": {
-    "scripts": ["background.js"]
+    "service_worker": "background.js"
   },
   "content_scripts": [
     {
       "matches": ["https://www.facebook.com/*"],
+      "js": ["notification.js", "story.js"],
       "css": ["styles.css"]
     }
   ],
-  "web_accessible_resources": ["db/emoji.json"],
-  "permissions": ["tabs", "https://www.facebook.com/*"]
+  "web_accessible_resources": [
+    {
+      "resources": ["db/emoji.json"],
+      "matches": ["https://www.facebook.com/*"]
+    }
+  ],
+  "permissions": ["tabs", "scripting"],
+  "host_permissions": ["https://www.facebook.com/*"]
 }

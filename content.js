@@ -54,7 +54,7 @@ class ContentInjector {
 		try {
 			await ContentInjector.injectScript("js/notification.js");
 			await injectEmojiData();
-			await ContentInjector.injectScript("story.js", {
+			await ContentInjector.injectScript("js/story.js", {
 				emojiUrl: chrome.runtime.getURL("data/emoji.json"),
 				emojiDataId: EMOJI_DATA_ID,
 			});

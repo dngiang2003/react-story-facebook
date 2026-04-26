@@ -1,42 +1,65 @@
-(function() {
+(function () {
     'use strict';
 
-    // Check if StoryReactor is already initialized
+    const currentScript = document.currentScript;
+    const config = {
+        emojiUrl: currentScript?.dataset.emojiUrl || "",
+        emojiDataId: currentScript?.dataset.emojiDataId || ""
+    };
+
+    if (window.StoryReactorInstance?.isInitialized) {
+        console.log('StoryReactor is already running, refreshing navigation state...');
+        window.StoryReactorInstance.handleNavigation();
+        return;
+    }
+
     if (window.StoryReactorInstance) {
-        console.log('StoryReactor is already running, cleaning up...');
         window.StoryReactorInstance.destroy();
         window.StoryReactorInstance = null;
     }
 
     class StoryReactor {
-        constructor() {
+        constructor(options = {}) {
+            this.config = options;
             this.emojiList = [];
             this.filteredEmojis = [];
             this.container = null;
             this.searchInput = null;
             this.emojiListElement = null;
+            this.favoriteListElement = null;
             this.groupCache = new Map();
             this.isInitialized = false;
             this.debounceTimeout = null;
             this.collator = new Intl.Collator(undefined, { sensitivity: 'base' });
             this.observer = null;
             this.pollingInterval = null;
-            this.cacheKey = 'emoji_cache';
+            this.cacheKey = 'story_reactor_emoji_cache_v2';
+            this.favoritesKey = 'story_reactor_favorite_reactions_v1';
+            this.favoriteReactions = [];
+            this.defaultFavoriteReactions = ["❤️", "😂", "😍", "👍", "👏", "🔥", "🎉", "😮"];
+            this.maxFavoriteReactions = 24;
             this.cacheTTL = 24 * 60 * 60 * 1000; // 24 hours
             this.isAttached = false;
             this.retryCount = 0;
             this.maxRetries = 10; // Tăng số lần thử
             this.retryDelay = 500; // Giảm độ trễ để thử nhanh hơn
+            this.maxReactionRetries = 2;
             this.currentPage = 0;
             this.itemsPerPage = 100;
             this.isLoading = false;
             this.hasMore = true;
+            this.originalPushState = null;
+            this.originalReplaceState = null;
+            this.patchedPushState = null;
+            this.patchedReplaceState = null;
+            this.isHistoryPatched = false;
 
             // Bind methods to preserve context
             this.handleNavigation = this.handleNavigation.bind(this);
             this.checkAndAttach = this.checkAndAttach.bind(this);
             this.handlePopState = this.handlePopState.bind(this);
             this.handleHashChange = this.handleHashChange.bind(this);
+            this.handleDocumentClick = this.handleDocumentClick.bind(this);
 
             // Throttle functions
             this.throttledAttach = this.throttle(this.attachToFooter.bind(this), 100);
@@ -46,7 +69,7 @@
         // Utility function for throttling
         throttle(func, limit) {
             let inThrottle;
-            return function(...args) {
+            return function (...args) {
                 if (!inThrottle) {
                     func.apply(this, args);
                     inThrottle = true;
@@ -58,7 +81,7 @@
         // Utility function for debouncing
         debounce(func, wait) {
             let timeout;
-            return function(...args) {
+            return function (...args) {
                 clearTimeout(timeout);
                 timeout = setTimeout(() => func.apply(this, args), wait);
             };
@@ -70,6 +93,7 @@
             try {
                 await this.loadEmojiData();
                 this.filteredEmojis = [...this.emojiList];
+                this.favoriteReactions = this.loadFavoriteReactions();
                 this.buildGroupCache();
                 this.setupNavigationListener();
                 this.startObserving();
@@ -89,36 +113,55 @@
                 return;
             }
 
-            for (let i = 0; i < 3; i++) {
-                try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-                    const response = await fetch('https://raw.githubusercontent.com/KimiZK-Dev/Tao-lao/refs/heads/main/emoji.json', {
-                        signal: controller.signal,
-                        cache: 'force-cache'
-                    });
-
-                    clearTimeout(timeoutId);
-
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-                    this.emojiList = await response.json();
-                    this.setCachedData(this.emojiList);
-                    return;
-                } catch (err) {
-                    console.warn(`Fetch attempt ${i + 1} failed:`, err);
-                    if (i === 2) {
-                        this.emojiList = [
-                            { codes: "1F600", value: "😀", name: "grinning face", group: "Smileys & Emotion" },
-                            { codes: "1F602", value: "😂", name: "face with tears of joy", group: "Smileys & Emotion" },
-                            { codes: "2764", value: "❤️", name: "red heart", group: "Smileys & Emotion" },
-                            { codes: "1F44D", value: "👍", name: "thumbs up", group: "People & Body" },
-                            { codes: "1F44E", value: "👎", name: "thumbs down", group: "People & Body" }
-                        ];
-                    }
+            try {
+                const emojiData = this.getInlineEmojiData() || await this.fetchLocalEmojiData();
+                if (!Array.isArray(emojiData)) {
+                    throw new Error('Local emoji data must be an array');
                 }
+
+                this.emojiList = emojiData;
+                this.setCachedData(this.emojiList);
+            } catch (err) {
+                console.warn('Failed to load local emoji data:', err);
+                this.emojiList = this.getFallbackEmojiData();
             }
+        }
+
+        getInlineEmojiData() {
+            if (!this.config.emojiDataId) {
+                return null;
+            }
+
+            const dataElement = document.getElementById(this.config.emojiDataId);
+            if (!dataElement?.textContent) {
+                return null;
+            }
+
+            return JSON.parse(dataElement.textContent);
+        }
+
+        async fetchLocalEmojiData() {
+            if (!this.config.emojiUrl) {
+                throw new Error('Missing local emoji URL');
+            }
+
+            const response = await fetch(this.config.emojiUrl, {
+                cache: 'force-cache'
+            });
+
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            return response.json();
+        }
+
+        getFallbackEmojiData() {
+            return [
+                { codes: "1F600", value: "😀", name: "grinning face", group: "Smileys & Emotion" },
+                { codes: "1F602", value: "😂", name: "face with tears of joy", group: "Smileys & Emotion" },
+                { codes: "2764", value: "❤️", name: "red heart", group: "Smileys & Emotion" },
+                { codes: "1F44D", value: "👍", name: "thumbs up", group: "People & Body" },
+                { codes: "1F44E", value: "👎", name: "thumbs down", group: "People & Body" }
+            ];
         }
 
         getCachedData() {
@@ -145,6 +188,69 @@
             } catch (err) {
                 console.warn('Failed to cache data:', err);
             }
+        }
+
+        loadFavoriteReactions() {
+            try {
+                const storedFavorites = localStorage.getItem(this.favoritesKey);
+                if (storedFavorites) {
+                    return this.normalizeFavoriteReactions(JSON.parse(storedFavorites));
+                }
+            } catch (err) {
+                console.warn('Failed to read favorite reactions:', err);
+            }
+
+            return this.normalizeFavoriteReactions(this.defaultFavoriteReactions);
+        }
+
+        saveFavoriteReactions() {
+            try {
+                localStorage.setItem(this.favoritesKey, JSON.stringify(this.favoriteReactions));
+            } catch (err) {
+                console.warn('Failed to save favorite reactions:', err);
+            }
+        }
+
+        normalizeFavoriteReactions(list) {
+            if (!Array.isArray(list)) {
+                return [];
+            }
+
+            const seen = new Set();
+            const normalized = [];
+
+            list.forEach(emoji => {
+                if (typeof emoji !== 'string') return;
+
+                const value = emoji.trim();
+                if (!value || seen.has(value)) return;
+
+                seen.add(value);
+                normalized.push(value);
+            });
+
+            return normalized.slice(0, this.maxFavoriteReactions);
+        }
+
+        isFavoriteReaction(emoji) {
+            return this.favoriteReactions.includes(emoji);
+        }
+
+        toggleFavoriteReaction(emoji) {
+            if (!emoji) return;
+
+            if (this.isFavoriteReaction(emoji)) {
+                this.favoriteReactions = this.favoriteReactions.filter(item => item !== emoji);
+                this.notifyInfo(`Đã bỏ ${emoji} khỏi yêu thích`);
+            } else {
+                this.favoriteReactions = [emoji, ...this.favoriteReactions.filter(item => item !== emoji)]
+                    .slice(0, this.maxFavoriteReactions);
+                this.notifyInfo(`Đã thêm ${emoji} vào yêu thích`);
+            }
+
+            this.saveFavoriteReactions();
+            this.renderFavoriteReactions();
+            this.updateRenderedFavoriteState(emoji);
         }
 
         isStoryUrl() {
@@ -182,6 +288,23 @@
             const panel = document.createElement("div");
             panel.className = "emoji-panel";
 
+            const favoriteSection = document.createElement("div");
+            favoriteSection.className = "favorite-section";
+
+            const favoriteHeader = document.createElement("div");
+            favoriteHeader.className = "favorite-header";
+
+            const favoriteTitle = document.createElement("span");
+            favoriteTitle.className = "favorite-title";
+            favoriteTitle.textContent = "Yêu thích";
+
+            favoriteHeader.appendChild(favoriteTitle);
+
+            this.favoriteListElement = document.createElement("div");
+            this.favoriteListElement.className = "favorite-list";
+            favoriteSection.appendChild(favoriteHeader);
+            favoriteSection.appendChild(this.favoriteListElement);
+
             this.searchInput = document.createElement("input");
             this.searchInput.placeholder = "Tìm kiếm biểu tượng cảm xúc...";
             this.searchInput.className = "emoji-search";
@@ -198,6 +321,7 @@
             }, 100));
 
             listContainer.appendChild(this.emojiListElement);
+            panel.appendChild(favoriteSection);
             panel.appendChild(this.searchInput);
             panel.appendChild(listContainer);
             this.container.appendChild(button);
@@ -208,6 +332,7 @@
             requestAnimationFrame(() => {
                 this.currentPage = 0;
                 this.hasMore = true;
+                this.renderFavoriteReactions();
                 this.renderEmojis(this.filteredEmojis, true);
                 this.renderGroupTabs();
             });
@@ -323,6 +448,9 @@
                     console.error('Failed to attach to footer:', err);
                     this.scheduleRetry();
                 }
+            } else if (footer && this.container && footer.contains(this.container)) {
+                this.isAttached = true;
+                this.retryCount = 0;
             } else if (!footer) {
                 console.debug('Footer not found, scheduling retry');
                 this.scheduleRetry();
@@ -350,18 +478,27 @@
             window.addEventListener('popstate', this.handlePopState);
             window.addEventListener('hashchange', this.handleHashChange);
 
-            const originalPushState = history.pushState;
-            const originalReplaceState = history.replaceState;
+            if (this.isHistoryPatched) {
+                return;
+            }
 
-            history.pushState = (...args) => {
-                originalPushState.apply(history, args);
+            this.originalPushState = history.pushState;
+            this.originalReplaceState = history.replaceState;
+
+            this.patchedPushState = (...args) => {
+                this.originalPushState.apply(history, args);
                 this.throttledNavigation();
             };
 
-            history.replaceState = (...args) => {
-                originalReplaceState.apply(history, args);
+            this.patchedReplaceState = (...args) => {
+                this.originalReplaceState.apply(history, args);
                 this.throttledNavigation();
             };
+
+            history.pushState = this.patchedPushState;
+            history.replaceState = this.patchedReplaceState;
+
+            this.isHistoryPatched = true;
         }
 
         handlePopState() {
@@ -412,6 +549,49 @@
             }, 50);
         }
 
+        renderFavoriteReactions() {
+            if (!this.favoriteListElement) return;
+
+            this.favoriteListElement.innerHTML = "";
+
+            if (this.favoriteReactions.length === 0) {
+                const empty = document.createElement("div");
+                empty.className = "favorite-empty";
+                empty.textContent = "Chưa có";
+                this.favoriteListElement.appendChild(empty);
+                return;
+            }
+
+            const frag = document.createDocumentFragment();
+
+            this.favoriteReactions.forEach(emoji => {
+                const item = document.createElement("div");
+                item.className = "favorite-item";
+
+                const reactionButton = document.createElement("button");
+                reactionButton.type = "button";
+                reactionButton.className = "favorite-reaction";
+                reactionButton.dataset.emoji = emoji;
+                reactionButton.textContent = emoji;
+                reactionButton.title = `Gửi ${emoji}`;
+                reactionButton.setAttribute("aria-label", `Gửi ${emoji}`);
+
+                const removeButton = document.createElement("button");
+                removeButton.type = "button";
+                removeButton.className = "favorite-remove";
+                removeButton.dataset.emoji = emoji;
+                removeButton.textContent = "×";
+                removeButton.title = `Bỏ ${emoji}`;
+                removeButton.setAttribute("aria-label", `Bỏ ${emoji}`);
+
+                item.appendChild(reactionButton);
+                item.appendChild(removeButton);
+                frag.appendChild(item);
+            });
+
+            this.favoriteListElement.appendChild(frag);
+        }
+
         renderEmojis(list, reset = false) {
             if (!this.emojiListElement) return;
 
@@ -438,10 +618,23 @@
                 emojisToRender.forEach((e, index) => {
                     const li = document.createElement("li");
                     li.className = "emoji";
-                    li.textContent = e.value;
                     li.title = e.name;
                     li.dataset.emoji = e.value;
                     li.style.animationDelay = `${index * 10}ms`;
+
+                    const value = document.createElement("span");
+                    value.className = "emoji-value";
+                    value.textContent = e.value;
+
+                    const favoriteButton = document.createElement("button");
+                    favoriteButton.type = "button";
+                    favoriteButton.className = "favorite-toggle";
+                    favoriteButton.dataset.emoji = e.value;
+                    favoriteButton.textContent = "★";
+
+                    li.appendChild(value);
+                    li.appendChild(favoriteButton);
+                    this.updateEmojiFavoriteState(li, e.value);
                     frag.appendChild(li);
                 });
 
@@ -461,6 +654,32 @@
                     if (loadingIndicator) {
                         loadingIndicator.remove();
                     }
+                }
+            });
+        }
+
+        updateEmojiFavoriteState(emojiElement, emoji) {
+            const isFavorite = this.isFavoriteReaction(emoji);
+            const favoriteButton = emojiElement.querySelector(".favorite-toggle");
+
+            emojiElement.classList.toggle("is-favorite", isFavorite);
+
+            if (favoriteButton) {
+                favoriteButton.classList.toggle("active", isFavorite);
+                favoriteButton.title = isFavorite ? `Bỏ ${emoji} khỏi yêu thích` : `Thêm ${emoji} vào yêu thích`;
+                favoriteButton.setAttribute(
+                    "aria-label",
+                    isFavorite ? `Bỏ ${emoji} khỏi yêu thích` : `Thêm ${emoji} vào yêu thích`
+                );
+            }
+        }
+
+        updateRenderedFavoriteState(emoji) {
+            if (!this.emojiListElement) return;
+
+            this.emojiListElement.querySelectorAll(".emoji").forEach(emojiElement => {
+                if (emojiElement.dataset.emoji === emoji) {
+                    this.updateEmojiFavoriteState(emojiElement, emoji);
                 }
             });
         }
@@ -523,6 +742,14 @@
             });
 
             this.emojiListElement.addEventListener('click', (e) => {
+                const favoriteButton = e.target.closest('.favorite-toggle');
+                if (favoriteButton) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.toggleFavoriteReaction(favoriteButton.dataset.emoji);
+                    return;
+                }
+
                 const emojiEl = e.target.closest('.emoji');
                 if (emojiEl) {
                     e.preventDefault();
@@ -532,13 +759,29 @@
             });
 
             panel.addEventListener('click', (e) => {
+                const removeFavorite = e.target.closest('.favorite-remove');
+                if (removeFavorite) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.toggleFavoriteReaction(removeFavorite.dataset.emoji);
+                    return;
+                }
+
+                const favoriteReaction = e.target.closest('.favorite-reaction');
+                if (favoriteReaction) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.handleReaction(favoriteReaction.dataset.emoji);
+                    return;
+                }
+
                 const tab = e.target.closest('.emoji-tab');
                 if (tab) {
                     e.preventDefault();
                     e.stopPropagation();
 
-                    this.filteredEmojis = tab.dataset.group === 'all' 
-                        ? [...this.emojiList] 
+                    this.filteredEmojis = tab.dataset.group === 'all'
+                        ? [...this.emojiList]
                         : this.groupCache.get(tab.dataset.group) || [];
 
                     this.currentPage = 0;
@@ -550,11 +793,19 @@
                 }
             });
 
-            document.addEventListener('click', (e) => {
-                if (!this.container.contains(e.target)) {
-                    panel.classList.remove("show");
-                }
-            });
+            document.removeEventListener('click', this.handleDocumentClick);
+            document.addEventListener('click', this.handleDocumentClick);
+        }
+
+        handleDocumentClick(e) {
+            if (!this.container || this.container.contains(e.target)) {
+                return;
+            }
+
+            const panel = this.container.querySelector(".emoji-panel");
+            if (panel) {
+                panel.classList.remove("show");
+            }
         }
 
         async handleReaction(emoji) {
@@ -572,15 +823,41 @@
                 }
 
                 await this.reactStory(userId, fbDtsg, storyId, emoji);
+                this.notifySuccess(`Đã thả cảm xúc ${emoji}`);
                 console.log('Gửi phản hồi thành công:', emoji);
             } catch (err) {
+                this.notifyError('Không gửi được cảm xúc');
                 console.error('Gửi phản hồi thất bại:', err);
+            }
+        }
+
+        notifySuccess(message) {
+            if (window.StoryReactorNotifications?.success) {
+                window.StoryReactorNotifications.success(message);
+            } else if (typeof window.showSuccess === 'function') {
+                window.showSuccess(message);
+            }
+        }
+
+        notifyError(message) {
+            if (window.StoryReactorNotifications?.error) {
+                window.StoryReactorNotifications.error(message);
+            } else if (typeof window.showError === 'function') {
+                window.showError(message);
+            }
+        }
+
+        notifyInfo(message) {
+            if (window.StoryReactorNotifications?.info) {
+                window.StoryReactorNotifications.info(message);
+            } else if (typeof window.showInfo === 'function') {
+                window.showInfo(message);
             }
         }
 
         getStoryId() {
             const story = document.querySelector(".xh8yej3.x1n2onr6[data-id]") ||
-                         document.querySelector("[data-id]");
+                document.querySelector("[data-id]");
             let storyId = story?.dataset.id || "";
 
             if (storyId && !storyId.startsWith('Uzpf')) {
@@ -613,7 +890,7 @@
             return userMatch?.[1] || "";
         }
 
-        async reactStory(userId, fbDtsg, storyId, reaction) {
+        async reactStory(userId, fbDtsg, storyId, reaction, attempt = 0) {
             try {
                 const variables = {
                     input: {
@@ -641,7 +918,7 @@
 
                 const response = await fetch("https://www.facebook.com/api/graphql/", {
                     method: "POST",
-                    headers: { 
+                    headers: {
                         "Content-Type": "application/x-www-form-urlencoded",
                         "Accept": "application/json",
                         "X-FB-Friendly-Name": "useStoriesSendReplyMutation",
@@ -662,11 +939,11 @@
                 return result;
             } catch (err) {
                 console.error('Thử gửi phản hồi thất bại:', err);
-                if (this.retryCount < this.maxRetries) {
-                    this.retryCount++;
-                    console.log(`Thử lại phản hồi... Lần ${this.retryCount}`);
-                    await new Promise(resolve => setTimeout(resolve, this.retryDelay * this.retryCount));
-                    return this.reactStory(userId, fbDtsg, storyId, reaction);
+                if (attempt < this.maxReactionRetries) {
+                    const nextAttempt = attempt + 1;
+                    console.log(`Thử lại phản hồi... Lần ${nextAttempt}`);
+                    await new Promise(resolve => setTimeout(resolve, this.retryDelay * nextAttempt));
+                    return this.reactStory(userId, fbDtsg, storyId, reaction, nextAttempt);
                 }
                 throw err;
             }
@@ -678,14 +955,35 @@
             if (this.container && this.container.parentNode) {
                 this.container.remove();
             }
+            document.removeEventListener('click', this.handleDocumentClick);
             window.removeEventListener('popstate', this.handlePopState);
             window.removeEventListener('hashchange', this.handleHashChange);
+            if (this.isHistoryPatched) {
+                if (history.pushState === this.patchedPushState) {
+                    history.pushState = this.originalPushState;
+                }
+
+                if (history.replaceState === this.patchedReplaceState) {
+                    history.replaceState = this.originalReplaceState;
+                }
+            }
+
+            this.container = null;
+            this.searchInput = null;
+            this.emojiListElement = null;
+            this.favoriteListElement = null;
+            this.originalPushState = null;
+            this.originalReplaceState = null;
+            this.patchedPushState = null;
+            this.patchedReplaceState = null;
+            this.isHistoryPatched = false;
+            this.isAttached = false;
             clearTimeout(this.debounceTimeout);
             this.isInitialized = false;
         }
     }
 
-    const reactor = new StoryReactor();
+    const reactor = new StoryReactor(config);
     window.StoryReactorInstance = reactor;
     reactor.init();
 
@@ -696,11 +994,10 @@
         }
     };
 
-    window.addEventListener('beforeunload', cleanup);
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            reactor.handleNavigation();
-        });
+    if (window.StoryReactorCleanup) {
+        window.removeEventListener('beforeunload', window.StoryReactorCleanup);
     }
+
+    window.StoryReactorCleanup = cleanup;
+    window.addEventListener('beforeunload', cleanup);
 })();

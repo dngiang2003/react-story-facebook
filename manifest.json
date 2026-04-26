@@ -24,16 +24,8 @@
 	],
 	"web_accessible_resources": [
 		{
-			"resources": ["story.js"],
+			"resources": ["story.js", "js/notification.js", "data/emoji.json"],
 			"matches": ["https://www.facebook.com/*"]
 		}
-	],
-	"permissions": [
-		"activeTab",
-		"scripting"
-	],
-	"host_permissions": [
-		"https://www.facebook.com/*",
-		"https://raw.githubusercontent.com/*"
 	]
 }

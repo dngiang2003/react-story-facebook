@@ -63,6 +63,113 @@
 	transform: translateY(0);
 }
 
+.favorite-section {
+	flex-shrink: 0;
+	margin-bottom: 10px;
+}
+
+.favorite-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	min-height: 18px;
+	margin-bottom: 6px;
+}
+
+.favorite-title {
+	font-size: 12px;
+	font-weight: 600;
+	color: #65676b;
+}
+
+.favorite-list {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 38px;
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding-bottom: 2px;
+	scrollbar-width: thin;
+	scrollbar-color: #ccc transparent;
+}
+
+.favorite-list::-webkit-scrollbar {
+	height: 4px;
+}
+
+.favorite-list::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.favorite-list::-webkit-scrollbar-thumb {
+	background: #ccc;
+	border-radius: 2px;
+}
+
+.favorite-item {
+	display: inline-flex;
+	align-items: center;
+	flex: 0 0 auto;
+	border: 1px solid #e2e5e9;
+	border-radius: 8px;
+	overflow: hidden;
+	background: #f7f8fa;
+}
+
+.favorite-reaction,
+.favorite-remove,
+.favorite-toggle {
+	font-family: inherit;
+	appearance: none;
+	-webkit-appearance: none;
+	cursor: pointer;
+}
+
+.favorite-reaction {
+	width: 38px;
+	height: 36px;
+	border: none;
+	background: #ffffff;
+	font-size: 22px;
+	line-height: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.favorite-reaction:hover {
+	background: #e8f4fd;
+}
+
+.favorite-remove {
+	width: 24px;
+	height: 36px;
+	border: none;
+	border-left: 1px solid #e2e5e9;
+	background: #f7f8fa;
+	color: #777;
+	font-size: 15px;
+	line-height: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.favorite-remove:hover {
+	background: #ffe8e8;
+	color: #c0262d;
+}
+
+.favorite-empty {
+	display: flex;
+	align-items: center;
+	min-height: 36px;
+	color: #8a8d91;
+	font-size: 12px;
+	padding: 0 4px;
+}
+
 /* Search input - Top section */
 .emoji-search {
 	width: 100%;
@@ -127,6 +234,7 @@
 .emoji {
 	width: 44px;
 	height: 44px;
+	position: relative;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -137,6 +245,55 @@
 	user-select: none;
 	background: #ffffff;
 	border: 1px solid transparent;
+}
+
+.emoji-value {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 100%;
+	line-height: 1;
+}
+
+.favorite-toggle {
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 1px solid rgba(0, 0, 0, 0.08);
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.88);
+	color: #9a9a9a;
+	font-size: 11px;
+	line-height: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0.45;
+	transition: opacity 0.2s ease, color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.emoji:hover .favorite-toggle,
+.favorite-toggle:focus-visible,
+.favorite-toggle.active {
+	opacity: 1;
+}
+
+.favorite-toggle:hover {
+	transform: scale(1.08);
+}
+
+.favorite-toggle.active {
+	background: #fff7df;
+	border-color: #f5c451;
+	color: #f59e0b;
+}
+
+.emoji.is-favorite {
+	border-color: #f5c451;
 }
 
 .emoji:hover {
@@ -250,7 +407,22 @@
 		height: 40px;
 		font-size: 24px;
 	}
-	
+
+	.favorite-reaction {
+		width: 36px;
+		height: 34px;
+		font-size: 20px;
+	}
+
+	.favorite-remove {
+		width: 22px;
+		height: 34px;
+	}
+
+	.favorite-list {
+		min-height: 36px;
+	}
+
 	.emoji-tab {
 		min-width: 36px;
 		height: 36px;
@@ -271,7 +443,39 @@
 		border-color: #555;
 		color: #fff;
 	}
-	
+
+	.favorite-title {
+		color: #b0b3b8;
+	}
+
+	.favorite-item {
+		background: #3d3d3d;
+		border-color: #555;
+	}
+
+	.favorite-reaction {
+		background: #4d4d4d;
+	}
+
+	.favorite-reaction:hover {
+		background: #1a4a66;
+	}
+
+	.favorite-remove {
+		background: #3d3d3d;
+		border-left-color: #555;
+		color: #c8c8c8;
+	}
+
+	.favorite-remove:hover {
+		background: #5a1f25;
+		color: #ffb4b8;
+	}
+
+	.favorite-empty {
+		color: #aaa;
+	}
+
 	.emoji-search::placeholder {
 		color: #aaa;
 	}
@@ -293,6 +497,18 @@
 	.emoji:hover {
 		background: #1a4a66;
 		border-color: #0078ff;
+	}
+
+	.favorite-toggle {
+		background: rgba(36, 37, 38, 0.9);
+		border-color: rgba(255, 255, 255, 0.15);
+		color: #c8c8c8;
+	}
+
+	.favorite-toggle.active {
+		background: #4a3514;
+		border-color: #f5c451;
+		color: #f5c451;
 	}
 	
 	.emoji-group-tabs {

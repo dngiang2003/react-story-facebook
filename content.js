@@ -21,11 +21,83 @@ class ContentInjector {
 (() => {
 	const INJECTED_ATTR = "data-story-reactor-bundle-injected";
 	const EMOJI_DATA_ID = "story-reactor-emoji-data";
+	const STORAGE_PAGE_SOURCE = "story-reactor-page";
+	const STORAGE_CONTENT_SOURCE = "story-reactor-content";
+	const STORAGE_KEYS = new Set([
+		"story_reactor_favorite_reactions_v1",
+		"story_reactor_reaction_combos_v1",
+	]);
 	let lastUrl = "";
 
 	const isStoryUrl = () => {
 		return window.location.hostname === "www.facebook.com" &&
 			window.location.pathname.includes("/stories");
+	};
+
+	const readStorage = (key) => {
+		return new Promise((resolve, reject) => {
+			chrome.storage.local.get(key, (result) => {
+				const error = chrome.runtime.lastError;
+				if (error) {
+					reject(new Error(error.message));
+					return;
+				}
+
+				resolve(result[key]);
+			});
+		});
+	};
+
+	const writeStorage = (key, value) => {
+		return new Promise((resolve, reject) => {
+			chrome.storage.local.set({ [key]: value }, () => {
+				const error = chrome.runtime.lastError;
+				if (error) {
+					reject(new Error(error.message));
+					return;
+				}
+
+				resolve();
+			});
+		});
+	};
+
+	const setupStorageBridge = () => {
+		if (window.__StoryReactorStorageBridgeInstalled) return;
+		window.__StoryReactorStorageBridgeInstalled = true;
+
+		window.addEventListener("message", async (event) => {
+			if (event.source !== window) return;
+
+			const message = event.data;
+			if (!message || message.source !== STORAGE_PAGE_SOURCE) return;
+			if (typeof message.requestId !== "string" || !STORAGE_KEYS.has(message.key)) return;
+
+			const respond = (payload) => {
+				window.postMessage({
+					source: STORAGE_CONTENT_SOURCE,
+					requestId: message.requestId,
+					...payload,
+				}, window.location.origin);
+			};
+
+			try {
+				if (message.type === "storage:get") {
+					respond({ ok: true, value: await readStorage(message.key) });
+					return;
+				}
+
+				if (message.type === "storage:set") {
+					await writeStorage(message.key, message.value);
+					respond({ ok: true });
+					return;
+				}
+
+				respond({ ok: false, error: "Unsupported storage action" });
+			} catch (err) {
+				respond({ ok: false, error: err.message || "Storage bridge failed" });
+			}
+		});
 	};
 
 	const injectEmojiData = async () => {
@@ -74,6 +146,7 @@ class ContentInjector {
 		}
 	};
 
+	setupStorageBridge();
 	handleLocationChange();
 	setInterval(handleLocationChange, 750);
 })();

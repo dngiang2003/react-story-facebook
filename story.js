@@ -118,8 +118,8 @@
             try {
                 await this.loadEmojiData();
                 this.filteredEmojis = [...this.emojiList];
-                this.favoriteReactions = this.loadFavoriteReactions();
-                this.reactionCombos = this.loadReactionCombos();
+                this.favoriteReactions = await this.loadFavoriteReactions();
+                this.reactionCombos = await this.loadReactionCombos();
                 this.buildGroupCache();
                 this.setupNavigationListener();
                 this.startObserving();
@@ -216,46 +216,107 @@
             }
         }
 
-        loadFavoriteReactions() {
+        requestExtensionStorage(type, key, value) {
+            return new Promise(resolve => {
+                const requestId = `story_reactor_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+                const timeout = setTimeout(() => {
+                    window.removeEventListener("message", handleResponse);
+                    resolve({ ok: false, error: "Storage bridge timeout" });
+                }, 1000);
+
+                const handleResponse = (event) => {
+                    if (event.source !== window) return;
+
+                    const message = event.data;
+                    if (!message || message.source !== "story-reactor-content") return;
+                    if (message.requestId !== requestId) return;
+
+                    clearTimeout(timeout);
+                    window.removeEventListener("message", handleResponse);
+                    resolve(message);
+                };
+
+                window.addEventListener("message", handleResponse);
+                window.postMessage({
+                    source: "story-reactor-page",
+                    type,
+                    key,
+                    value,
+                    requestId
+                }, window.location.origin);
+            });
+        }
+
+        readLocalStorageJson(key) {
             try {
-                const storedFavorites = localStorage.getItem(this.favoritesKey);
-                if (storedFavorites) {
-                    return this.normalizeFavoriteReactions(JSON.parse(storedFavorites));
-                }
+                const storedValue = localStorage.getItem(key);
+                return storedValue ? JSON.parse(storedValue) : null;
             } catch (err) {
-                console.warn('Failed to read favorite reactions:', err);
+                console.warn(`Failed to read localStorage key ${key}:`, err);
+                return null;
+            }
+        }
+
+        writeLocalStorageJson(key, value) {
+            try {
+                localStorage.setItem(key, JSON.stringify(value));
+            } catch (err) {
+                console.warn(`Failed to write localStorage key ${key}:`, err);
+            }
+        }
+
+        async loadFavoriteReactions() {
+            const storedFavorites = await this.requestExtensionStorage("storage:get", this.favoritesKey);
+            if (storedFavorites.ok && Array.isArray(storedFavorites.value)) {
+                return this.normalizeFavoriteReactions(storedFavorites.value);
+            }
+
+            const localFavorites = this.readLocalStorageJson(this.favoritesKey);
+            if (Array.isArray(localFavorites)) {
+                const normalized = this.normalizeFavoriteReactions(localFavorites);
+                this.saveFavoriteReactions(normalized);
+                return normalized;
             }
 
             return this.normalizeFavoriteReactions(this.defaultFavoriteReactions);
         }
 
-        saveFavoriteReactions() {
-            try {
-                localStorage.setItem(this.favoritesKey, JSON.stringify(this.favoriteReactions));
-            } catch (err) {
-                console.warn('Failed to save favorite reactions:', err);
-            }
+        saveFavoriteReactions(favoriteReactions = this.favoriteReactions) {
+            const normalized = this.normalizeFavoriteReactions(favoriteReactions);
+            this.writeLocalStorageJson(this.favoritesKey, normalized);
+            this.requestExtensionStorage("storage:set", this.favoritesKey, normalized)
+                .then(response => {
+                    if (!response.ok) {
+                        console.warn('Failed to save favorite reactions:', response.error);
+                    }
+                });
         }
 
-        loadReactionCombos() {
-            try {
-                const storedCombos = localStorage.getItem(this.combosKey);
-                if (storedCombos) {
-                    return this.normalizeReactionCombos(JSON.parse(storedCombos));
-                }
-            } catch (err) {
-                console.warn('Failed to read reaction combos:', err);
+        async loadReactionCombos() {
+            const storedCombos = await this.requestExtensionStorage("storage:get", this.combosKey);
+            if (storedCombos.ok && Array.isArray(storedCombos.value)) {
+                return this.normalizeReactionCombos(storedCombos.value);
+            }
+
+            const localCombos = this.readLocalStorageJson(this.combosKey);
+            if (Array.isArray(localCombos)) {
+                const normalized = this.normalizeReactionCombos(localCombos);
+                this.saveReactionCombos(normalized);
+                return normalized;
             }
 
             return [];
         }
 
-        saveReactionCombos() {
-            try {
-                localStorage.setItem(this.combosKey, JSON.stringify(this.reactionCombos));
-            } catch (err) {
-                console.warn('Failed to save reaction combos:', err);
-            }
+        saveReactionCombos(reactionCombos = this.reactionCombos) {
+            const normalized = this.normalizeReactionCombos(reactionCombos);
+            this.writeLocalStorageJson(this.combosKey, normalized);
+            this.requestExtensionStorage("storage:set", this.combosKey, normalized)
+                .then(response => {
+                    if (!response.ok) {
+                        console.warn('Failed to save reaction combos:', response.error);
+                    }
+                });
         }
 
         normalizeFavoriteReactions(list) {

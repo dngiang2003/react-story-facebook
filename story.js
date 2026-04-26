@@ -27,6 +27,20 @@
             this.searchInput = null;
             this.emojiListElement = null;
             this.favoriteListElement = null;
+            this.comboListElement = null;
+            this.managerDialog = null;
+            this.managerSearchInput = null;
+            this.managerEmojiListElement = null;
+            this.managerFavoriteListElement = null;
+            this.managerComboListElement = null;
+            this.managerSubtitleElement = null;
+            this.comboNameInput = null;
+            this.comboDraftListElement = null;
+            this.managerFilteredEmojis = [];
+            this.managerEmojiPage = 0;
+            this.managerEmojiItemsPerPage = 240;
+            this.managerEmojiHasMore = false;
+            this.isManagerEmojiLoading = false;
             this.groupCache = new Map();
             this.isInitialized = false;
             this.debounceTimeout = null;
@@ -35,9 +49,16 @@
             this.pollingInterval = null;
             this.cacheKey = 'story_reactor_emoji_cache_v2';
             this.favoritesKey = 'story_reactor_favorite_reactions_v1';
+            this.combosKey = 'story_reactor_reaction_combos_v1';
             this.favoriteReactions = [];
+            this.reactionCombos = [];
+            this.comboDraftReactions = [];
+            this.editingComboId = null;
+            this.activeManagerTab = 'favorites';
             this.defaultFavoriteReactions = ["❤️", "😂", "😍", "👍", "👏", "🔥", "🎉", "😮"];
             this.maxFavoriteReactions = 24;
+            this.maxReactionCombos = 20;
+            this.maxComboReactions = 16;
             this.cacheTTL = 24 * 60 * 60 * 1000; // 24 hours
             this.isAttached = false;
             this.retryCount = 0;
@@ -60,6 +81,8 @@
             this.handlePopState = this.handlePopState.bind(this);
             this.handleHashChange = this.handleHashChange.bind(this);
             this.handleDocumentClick = this.handleDocumentClick.bind(this);
+            this.handleDialogKeydown = this.handleDialogKeydown.bind(this);
+            this.handleManagerEmojiScroll = this.handleManagerEmojiScroll.bind(this);
 
             // Throttle functions
             this.throttledAttach = this.throttle(this.attachToFooter.bind(this), 100);
@@ -94,6 +117,7 @@
                 await this.loadEmojiData();
                 this.filteredEmojis = [...this.emojiList];
                 this.favoriteReactions = this.loadFavoriteReactions();
+                this.reactionCombos = this.loadReactionCombos();
                 this.buildGroupCache();
                 this.setupNavigationListener();
                 this.startObserving();
@@ -211,6 +235,27 @@
             }
         }
 
+        loadReactionCombos() {
+            try {
+                const storedCombos = localStorage.getItem(this.combosKey);
+                if (storedCombos) {
+                    return this.normalizeReactionCombos(JSON.parse(storedCombos));
+                }
+            } catch (err) {
+                console.warn('Failed to read reaction combos:', err);
+            }
+
+            return [];
+        }
+
+        saveReactionCombos() {
+            try {
+                localStorage.setItem(this.combosKey, JSON.stringify(this.reactionCombos));
+            } catch (err) {
+                console.warn('Failed to save reaction combos:', err);
+            }
+        }
+
         normalizeFavoriteReactions(list) {
             if (!Array.isArray(list)) {
                 return [];
@@ -232,6 +277,39 @@
             return normalized.slice(0, this.maxFavoriteReactions);
         }
 
+        normalizeReactionCombos(list) {
+            if (!Array.isArray(list)) {
+                return [];
+            }
+
+            const seenIds = new Set();
+            return list
+                .map((combo, index) => {
+                    if (!combo || typeof combo !== 'object') return null;
+
+                    const reactions = this.normalizeFavoriteReactions(combo.reactions)
+                        .slice(0, this.maxComboReactions);
+                    if (reactions.length === 0) return null;
+
+                    const id = typeof combo.id === 'string' && combo.id.trim()
+                        ? combo.id.trim()
+                        : this.createComboId(index);
+                    const uniqueId = seenIds.has(id) ? this.createComboId(index) : id;
+                    const name = typeof combo.name === 'string' && combo.name.trim()
+                        ? combo.name.trim().slice(0, 40)
+                        : `Combo ${index + 1}`;
+
+                    seenIds.add(uniqueId);
+                    return { id: uniqueId, name, reactions };
+                })
+                .filter(Boolean)
+                .slice(0, this.maxReactionCombos);
+        }
+
+        createComboId(seed = Date.now()) {
+            return `combo_${seed}_${Math.random().toString(36).slice(2, 8)}`;
+        }
+
         isFavoriteReaction(emoji) {
             return this.favoriteReactions.includes(emoji);
         }
@@ -250,7 +328,146 @@
 
             this.saveFavoriteReactions();
             this.renderFavoriteReactions();
+            this.renderManagerFavorites();
+            this.updateManagerEmojiOptionState(emoji);
             this.updateRenderedFavoriteState(emoji);
+        }
+
+        moveFavoriteReaction(index, direction) {
+            const targetIndex = index + direction;
+            if (targetIndex < 0 || targetIndex >= this.favoriteReactions.length) return;
+
+            const next = [...this.favoriteReactions];
+            const [item] = next.splice(index, 1);
+            next.splice(targetIndex, 0, item);
+            this.favoriteReactions = next;
+            this.saveFavoriteReactions();
+            this.renderFavoriteReactions();
+            this.renderManagerFavorites();
+        }
+
+        removeFavoriteReaction(emoji) {
+            if (!this.isFavoriteReaction(emoji)) return;
+
+            this.favoriteReactions = this.favoriteReactions.filter(item => item !== emoji);
+            this.saveFavoriteReactions();
+            this.renderFavoriteReactions();
+            this.renderManagerFavorites();
+            this.updateManagerEmojiOptionState(emoji);
+            this.updateRenderedFavoriteState(emoji);
+            this.notifyInfo(`Đã bỏ ${emoji} khỏi yêu thích`);
+        }
+
+        moveComboDraftReaction(index, direction) {
+            const targetIndex = index + direction;
+            if (targetIndex < 0 || targetIndex >= this.comboDraftReactions.length) return;
+
+            const next = [...this.comboDraftReactions];
+            const [item] = next.splice(index, 1);
+            next.splice(targetIndex, 0, item);
+            this.comboDraftReactions = next;
+            this.renderComboDraft();
+        }
+
+        toggleComboDraftReaction(emoji) {
+            if (!emoji) return;
+
+            if (this.comboDraftReactions.includes(emoji)) {
+                this.comboDraftReactions = this.comboDraftReactions.filter(item => item !== emoji);
+            } else if (this.comboDraftReactions.length < this.maxComboReactions) {
+                this.comboDraftReactions = [...this.comboDraftReactions, emoji];
+            } else {
+                this.notifyInfo(`Mỗi combo tối đa ${this.maxComboReactions} reaction`);
+            }
+
+            this.renderComboDraft();
+            this.updateManagerEmojiOptionState(emoji);
+        }
+
+        resetComboEditor() {
+            this.editingComboId = null;
+            this.comboDraftReactions = [];
+            if (this.comboNameInput) {
+                this.comboNameInput.value = "";
+            }
+            this.renderComboDraft();
+            this.renderManagerCombos();
+            this.renderManagerEmojiPicker();
+        }
+
+        editReactionCombo(comboId) {
+            const combo = this.reactionCombos.find(item => item.id === comboId);
+            if (!combo) return;
+
+            this.editingComboId = combo.id;
+            this.comboDraftReactions = [...combo.reactions];
+            if (this.comboNameInput) {
+                this.comboNameInput.value = combo.name;
+                this.comboNameInput.focus();
+            }
+            this.setActiveManagerTab('combos');
+            this.renderComboDraft();
+            this.renderManagerCombos();
+            this.renderManagerEmojiPicker();
+        }
+
+        saveComboDraft() {
+            const name = this.comboNameInput?.value.trim() || "";
+            const reactions = this.normalizeFavoriteReactions(this.comboDraftReactions)
+                .slice(0, this.maxComboReactions);
+
+            if (!name) {
+                this.notifyError('Hãy đặt tên combo trước khi lưu');
+                this.comboNameInput?.focus();
+                return;
+            }
+
+            if (reactions.length === 0) {
+                this.notifyError('Combo cần ít nhất 1 reaction');
+                return;
+            }
+
+            if (this.editingComboId) {
+                this.reactionCombos = this.reactionCombos.map(combo => (
+                    combo.id === this.editingComboId
+                        ? { ...combo, name: name.slice(0, 40), reactions }
+                        : combo
+                ));
+                this.notifyInfo(`Đã cập nhật combo ${name}`);
+            } else {
+                if (this.reactionCombos.length >= this.maxReactionCombos) {
+                    this.notifyError(`Tối đa ${this.maxReactionCombos} combo`);
+                    return;
+                }
+
+                this.reactionCombos = [
+                    ...this.reactionCombos,
+                    { id: this.createComboId(), name: name.slice(0, 40), reactions }
+                ];
+                this.notifyInfo(`Đã tạo combo ${name}`);
+            }
+
+            this.saveReactionCombos();
+            this.renderReactionCombos();
+            this.resetComboEditor();
+        }
+
+        deleteReactionCombo(comboId) {
+            const combo = this.reactionCombos.find(item => item.id === comboId);
+            if (!combo) return;
+
+            if (!window.confirm(`Xóa combo "${combo.name}"?`)) return;
+
+            this.reactionCombos = this.reactionCombos.filter(item => item.id !== comboId);
+            this.saveReactionCombos();
+            this.renderReactionCombos();
+            this.renderManagerCombos();
+
+            if (this.editingComboId === comboId) {
+                this.resetComboEditor();
+            }
+
+            this.notifyInfo(`Đã xóa combo ${combo.name}`);
         }
 
         isStoryUrl() {
@@ -298,12 +515,43 @@
             favoriteTitle.className = "favorite-title";
             favoriteTitle.textContent = "Yêu thích";
 
+            const favoriteManageButton = document.createElement("button");
+            favoriteManageButton.type = "button";
+            favoriteManageButton.className = "panel-action";
+            favoriteManageButton.dataset.managerTab = "favorites";
+            favoriteManageButton.textContent = "Sắp xếp";
+
             favoriteHeader.appendChild(favoriteTitle);
+            favoriteHeader.appendChild(favoriteManageButton);
 
             this.favoriteListElement = document.createElement("div");
             this.favoriteListElement.className = "favorite-list";
             favoriteSection.appendChild(favoriteHeader);
             favoriteSection.appendChild(this.favoriteListElement);
+
+            const comboSection = document.createElement("div");
+            comboSection.className = "combo-section";
+
+            const comboHeader = document.createElement("div");
+            comboHeader.className = "combo-header";
+
+            const comboTitle = document.createElement("span");
+            comboTitle.className = "combo-title";
+            comboTitle.textContent = "Combo";
+
+            const comboManageButton = document.createElement("button");
+            comboManageButton.type = "button";
+            comboManageButton.className = "panel-action";
+            comboManageButton.dataset.managerTab = "combos";
+            comboManageButton.textContent = "Quản lý";
+
+            comboHeader.appendChild(comboTitle);
+            comboHeader.appendChild(comboManageButton);
+
+            this.comboListElement = document.createElement("div");
+            this.comboListElement.className = "combo-list";
+            comboSection.appendChild(comboHeader);
+            comboSection.appendChild(this.comboListElement);
 
             this.searchInput = document.createElement("input");
             this.searchInput.placeholder = "Tìm kiếm biểu tượng cảm xúc...";
@@ -322,6 +570,7 @@
 
             listContainer.appendChild(this.emojiListElement);
             panel.appendChild(favoriteSection);
+            panel.appendChild(comboSection);
             panel.appendChild(this.searchInput);
             panel.appendChild(listContainer);
             this.container.appendChild(button);
@@ -333,6 +582,7 @@
                 this.currentPage = 0;
                 this.hasMore = true;
                 this.renderFavoriteReactions();
+                this.renderReactionCombos();
                 this.renderEmojis(this.filteredEmojis, true);
                 this.renderGroupTabs();
             });
@@ -557,7 +807,7 @@
             if (this.favoriteReactions.length === 0) {
                 const empty = document.createElement("div");
                 empty.className = "favorite-empty";
-                empty.textContent = "Chưa có";
+                empty.textContent = "Mở Sắp xếp để chọn emoji";
                 this.favoriteListElement.appendChild(empty);
                 return;
             }
@@ -576,20 +826,49 @@
                 reactionButton.title = `Gửi ${emoji}`;
                 reactionButton.setAttribute("aria-label", `Gửi ${emoji}`);
 
-                const removeButton = document.createElement("button");
-                removeButton.type = "button";
-                removeButton.className = "favorite-remove";
-                removeButton.dataset.emoji = emoji;
-                removeButton.textContent = "×";
-                removeButton.title = `Bỏ ${emoji}`;
-                removeButton.setAttribute("aria-label", `Bỏ ${emoji}`);
-
                 item.appendChild(reactionButton);
-                item.appendChild(removeButton);
                 frag.appendChild(item);
             });
 
             this.favoriteListElement.appendChild(frag);
+        }
+
+        renderReactionCombos() {
+            if (!this.comboListElement) return;
+
+            this.comboListElement.innerHTML = "";
+
+            if (this.reactionCombos.length === 0) {
+                const empty = document.createElement("div");
+                empty.className = "combo-empty";
+                empty.textContent = "Chưa có combo";
+                this.comboListElement.appendChild(empty);
+                return;
+            }
+
+            const frag = document.createDocumentFragment();
+            this.reactionCombos.forEach(combo => {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "combo-chip";
+                button.dataset.comboId = combo.id;
+                button.title = `${combo.name}: ${combo.reactions.join(" ")}`;
+                button.setAttribute("aria-label", `Gửi combo ${combo.name}`);
+
+                const name = document.createElement("span");
+                name.className = "combo-chip-name";
+                name.textContent = combo.name;
+
+                const preview = document.createElement("span");
+                preview.className = "combo-chip-preview";
+                preview.textContent = combo.reactions.join("");
+
+                button.appendChild(name);
+                button.appendChild(preview);
+                frag.appendChild(button);
+            });
+
+            this.comboListElement.appendChild(frag);
         }
 
         renderEmojis(list, reset = false) {
@@ -626,14 +905,7 @@
                     value.className = "emoji-value";
                     value.textContent = e.value;
 
-                    const favoriteButton = document.createElement("button");
-                    favoriteButton.type = "button";
-                    favoriteButton.className = "favorite-toggle";
-                    favoriteButton.dataset.emoji = e.value;
-                    favoriteButton.textContent = "★";
-
                     li.appendChild(value);
-                    li.appendChild(favoriteButton);
                     this.updateEmojiFavoriteState(li, e.value);
                     frag.appendChild(li);
                 });
@@ -660,18 +932,7 @@
 
         updateEmojiFavoriteState(emojiElement, emoji) {
             const isFavorite = this.isFavoriteReaction(emoji);
-            const favoriteButton = emojiElement.querySelector(".favorite-toggle");
-
             emojiElement.classList.toggle("is-favorite", isFavorite);
-
-            if (favoriteButton) {
-                favoriteButton.classList.toggle("active", isFavorite);
-                favoriteButton.title = isFavorite ? `Bỏ ${emoji} khỏi yêu thích` : `Thêm ${emoji} vào yêu thích`;
-                favoriteButton.setAttribute(
-                    "aria-label",
-                    isFavorite ? `Bỏ ${emoji} khỏi yêu thích` : `Thêm ${emoji} vào yêu thích`
-                );
-            }
         }
 
         updateRenderedFavoriteState(emoji) {
@@ -682,6 +943,583 @@
                     this.updateEmojiFavoriteState(emojiElement, emoji);
                 }
             });
+        }
+
+        ensureReactionManager() {
+            if (this.managerDialog) return;
+
+            const overlay = document.createElement("div");
+            overlay.className = "reaction-manager-overlay";
+            overlay.setAttribute("aria-hidden", "true");
+
+            const dialog = document.createElement("div");
+            dialog.className = "reaction-manager-dialog";
+            dialog.setAttribute("role", "dialog");
+            dialog.setAttribute("aria-modal", "true");
+            dialog.setAttribute("aria-label", "Quản lý reaction");
+
+            const header = document.createElement("div");
+            header.className = "manager-header";
+
+            const titleWrap = document.createElement("div");
+            const title = document.createElement("h2");
+            title.className = "manager-title";
+            title.textContent = "Quản lý reaction";
+            this.managerSubtitleElement = document.createElement("p");
+            this.managerSubtitleElement.className = "manager-subtitle";
+            titleWrap.appendChild(title);
+            titleWrap.appendChild(this.managerSubtitleElement);
+
+            const closeButton = document.createElement("button");
+            closeButton.type = "button";
+            closeButton.className = "manager-close";
+            closeButton.dataset.managerAction = "close";
+            closeButton.textContent = "×";
+            closeButton.setAttribute("aria-label", "Đóng");
+
+            header.appendChild(titleWrap);
+            header.appendChild(closeButton);
+
+            const tabs = document.createElement("div");
+            tabs.className = "manager-tabs";
+            ["favorites", "combos"].forEach(tabName => {
+                const tab = document.createElement("button");
+                tab.type = "button";
+                tab.className = "manager-tab";
+                tab.dataset.managerTab = tabName;
+                tab.textContent = tabName === "favorites" ? "Yêu thích" : "Combo";
+                tabs.appendChild(tab);
+            });
+
+            const body = document.createElement("div");
+            body.className = "manager-body";
+
+            const favoritePanel = document.createElement("section");
+            favoritePanel.className = "manager-panel";
+            favoritePanel.dataset.managerPanel = "favorites";
+
+            const favoritePanelTitle = document.createElement("div");
+            favoritePanelTitle.className = "manager-section-title";
+            favoritePanelTitle.textContent = "Thứ tự yêu thích";
+            this.managerFavoriteListElement = document.createElement("div");
+            this.managerFavoriteListElement.className = "manager-sort-list";
+            favoritePanel.appendChild(favoritePanelTitle);
+            favoritePanel.appendChild(this.managerFavoriteListElement);
+
+            const comboPanel = document.createElement("section");
+            comboPanel.className = "manager-panel";
+            comboPanel.dataset.managerPanel = "combos";
+
+            const comboEditor = document.createElement("div");
+            comboEditor.className = "combo-editor";
+
+            const comboForm = document.createElement("div");
+            comboForm.className = "combo-form";
+
+            this.comboNameInput = document.createElement("input");
+            this.comboNameInput.className = "combo-name-input";
+            this.comboNameInput.type = "text";
+            this.comboNameInput.maxLength = 40;
+            this.comboNameInput.placeholder = "Tên combo";
+            this.comboNameInput.autocomplete = "off";
+
+            const saveComboButton = document.createElement("button");
+            saveComboButton.type = "button";
+            saveComboButton.className = "manager-primary";
+            saveComboButton.dataset.managerAction = "save-combo";
+            saveComboButton.textContent = "Lưu";
+
+            const newComboButton = document.createElement("button");
+            newComboButton.type = "button";
+            newComboButton.className = "manager-secondary";
+            newComboButton.dataset.managerAction = "new-combo";
+            newComboButton.textContent = "Mới";
+
+            comboForm.appendChild(this.comboNameInput);
+            comboForm.appendChild(saveComboButton);
+            comboForm.appendChild(newComboButton);
+
+            const draftTitle = document.createElement("div");
+            draftTitle.className = "manager-section-title";
+            draftTitle.textContent = "Reaction trong combo";
+
+            this.comboDraftListElement = document.createElement("div");
+            this.comboDraftListElement.className = "combo-draft-list";
+
+            comboEditor.appendChild(comboForm);
+            comboEditor.appendChild(draftTitle);
+            comboEditor.appendChild(this.comboDraftListElement);
+
+            const savedComboTitle = document.createElement("div");
+            savedComboTitle.className = "manager-section-title";
+            savedComboTitle.textContent = "Combo đã lưu";
+            this.managerComboListElement = document.createElement("div");
+            this.managerComboListElement.className = "manager-combo-list";
+
+            comboPanel.appendChild(comboEditor);
+            comboPanel.appendChild(savedComboTitle);
+            comboPanel.appendChild(this.managerComboListElement);
+
+            const picker = document.createElement("section");
+            picker.className = "manager-picker";
+
+            this.managerSearchInput = document.createElement("input");
+            this.managerSearchInput.className = "manager-search";
+            this.managerSearchInput.type = "text";
+            this.managerSearchInput.autocomplete = "off";
+
+            this.managerEmojiListElement = document.createElement("div");
+            this.managerEmojiListElement.className = "manager-emoji-list";
+
+            picker.appendChild(this.managerSearchInput);
+            picker.appendChild(this.managerEmojiListElement);
+
+            body.appendChild(favoritePanel);
+            body.appendChild(comboPanel);
+            body.appendChild(picker);
+
+            dialog.appendChild(header);
+            dialog.appendChild(tabs);
+            dialog.appendChild(body);
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+
+            overlay.addEventListener("click", (e) => this.handleManagerClick(e));
+            this.managerSearchInput.addEventListener("input", () => this.renderManagerEmojiPicker());
+            this.managerEmojiListElement.addEventListener("scroll", this.handleManagerEmojiScroll);
+            this.comboNameInput.addEventListener("keydown", (e) => {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    this.saveComboDraft();
+                }
+            });
+
+            this.managerDialog = overlay;
+        }
+
+        openReactionManager(tab = "favorites") {
+            this.ensureReactionManager();
+            this.setActiveManagerTab(tab);
+            this.managerDialog.classList.add("show");
+            this.managerDialog.setAttribute("aria-hidden", "false");
+            document.addEventListener("keydown", this.handleDialogKeydown);
+
+            requestAnimationFrame(() => {
+                if (this.activeManagerTab === "combos") {
+                    this.comboNameInput?.focus();
+                } else {
+                    this.managerSearchInput?.focus();
+                }
+            });
+        }
+
+        closeReactionManager() {
+            if (!this.managerDialog) return;
+
+            this.managerDialog.classList.remove("show");
+            this.managerDialog.setAttribute("aria-hidden", "true");
+            document.removeEventListener("keydown", this.handleDialogKeydown);
+            this.openReactionPanel();
+        }
+
+        openReactionPanel() {
+            const panel = this.container?.querySelector(".emoji-panel");
+            if (panel) {
+                panel.classList.add("show");
+            }
+        }
+
+        handleDialogKeydown(e) {
+            if (e.key === "Escape") {
+                this.closeReactionManager();
+            }
+        }
+
+        setActiveManagerTab(tab) {
+            this.activeManagerTab = tab === "combos" ? "combos" : "favorites";
+
+            if (!this.managerDialog) return;
+
+            this.managerDialog.querySelectorAll(".manager-tab").forEach(button => {
+                button.classList.toggle("active", button.dataset.managerTab === this.activeManagerTab);
+            });
+
+            this.managerDialog.querySelectorAll(".manager-panel").forEach(panel => {
+                panel.classList.toggle("active", panel.dataset.managerPanel === this.activeManagerTab);
+            });
+
+            if (this.managerSubtitleElement) {
+                this.managerSubtitleElement.textContent = this.activeManagerTab === "favorites"
+                    ? "Chọn emoji bằng nút lớn, rồi dùng mũi tên để sắp xếp thứ tự."
+                    : "Đặt tên combo, chọn một hoặc nhiều emoji, rồi lưu để dùng nhanh.";
+            }
+
+            if (this.managerSearchInput) {
+                this.managerSearchInput.placeholder = this.activeManagerTab === "favorites"
+                    ? "Tìm emoji để thêm hoặc bỏ yêu thích..."
+                    : "Tìm emoji để thêm vào combo...";
+            }
+
+            this.renderManagerFavorites();
+            this.renderManagerCombos();
+            this.renderComboDraft();
+            this.renderManagerEmojiPicker();
+        }
+
+        handleManagerClick(e) {
+            const target = e.target instanceof Element ? e.target : e.target?.parentElement;
+            if (!target) return;
+
+            if (target === this.managerDialog || target.closest('[data-manager-action="close"]')) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.closeReactionManager();
+                return;
+            }
+
+            const tab = target.closest(".manager-tab, .panel-action");
+            if (tab?.dataset.managerTab) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.setActiveManagerTab(tab.dataset.managerTab);
+                if (target.closest(".panel-action")) {
+                    this.openReactionManager(tab.dataset.managerTab);
+                }
+                return;
+            }
+
+            const emojiOption = target.closest(".manager-emoji-option");
+            if (emojiOption) {
+                e.preventDefault();
+                const emoji = emojiOption.dataset.emoji;
+                if (this.activeManagerTab === "favorites") {
+                    this.toggleFavoriteReaction(emoji);
+                } else {
+                    this.toggleComboDraftReaction(emoji);
+                }
+                return;
+            }
+
+            const actionButton = target.closest("[data-manager-action]");
+            if (!actionButton) return;
+
+            e.preventDefault();
+            const action = actionButton.dataset.managerAction;
+
+            if (action === "move-favorite") {
+                this.moveFavoriteReaction(Number(actionButton.dataset.index), Number(actionButton.dataset.direction));
+            } else if (action === "remove-favorite") {
+                this.removeFavoriteReaction(actionButton.dataset.emoji);
+            } else if (action === "save-combo") {
+                this.saveComboDraft();
+            } else if (action === "new-combo") {
+                this.resetComboEditor();
+            } else if (action === "remove-draft") {
+                this.comboDraftReactions = this.comboDraftReactions.filter(item => item !== actionButton.dataset.emoji);
+                this.renderComboDraft();
+                this.updateManagerEmojiOptionState(actionButton.dataset.emoji);
+            } else if (action === "move-draft") {
+                this.moveComboDraftReaction(Number(actionButton.dataset.index), Number(actionButton.dataset.direction));
+            } else if (action === "edit-combo") {
+                this.editReactionCombo(actionButton.dataset.comboId);
+            } else if (action === "delete-combo") {
+                this.deleteReactionCombo(actionButton.dataset.comboId);
+            }
+        }
+
+        renderManagerFavorites() {
+            if (!this.managerFavoriteListElement) return;
+
+            this.managerFavoriteListElement.innerHTML = "";
+
+            if (this.favoriteReactions.length === 0) {
+                const empty = document.createElement("div");
+                empty.className = "manager-empty";
+                empty.textContent = "Chưa có yêu thích. Chọn emoji ở danh sách bên dưới.";
+                this.managerFavoriteListElement.appendChild(empty);
+                return;
+            }
+
+            const frag = document.createDocumentFragment();
+            this.favoriteReactions.forEach((emoji, index) => {
+                frag.appendChild(this.createSortableReactionRow({
+                    emoji,
+                    index,
+                    total: this.favoriteReactions.length,
+                    moveAction: "move-favorite",
+                    removeAction: "remove-favorite"
+                }));
+            });
+
+            this.managerFavoriteListElement.appendChild(frag);
+        }
+
+        renderComboDraft() {
+            if (!this.comboDraftListElement) return;
+
+            this.comboDraftListElement.innerHTML = "";
+
+            if (this.comboDraftReactions.length === 0) {
+                const empty = document.createElement("div");
+                empty.className = "manager-empty";
+                empty.textContent = "Chọn emoji ở danh sách bên dưới.";
+                this.comboDraftListElement.appendChild(empty);
+                return;
+            }
+
+            const frag = document.createDocumentFragment();
+            this.comboDraftReactions.forEach((emoji, index) => {
+                frag.appendChild(this.createSortableReactionRow({
+                    emoji,
+                    index,
+                    total: this.comboDraftReactions.length,
+                    moveAction: "move-draft",
+                    removeAction: "remove-draft"
+                }));
+            });
+
+            this.comboDraftListElement.appendChild(frag);
+        }
+
+        createSortableReactionRow({ emoji, index, total, moveAction, removeAction }) {
+            const row = document.createElement("div");
+            row.className = "manager-sort-row";
+
+            const order = document.createElement("span");
+            order.className = "manager-sort-index";
+            order.textContent = String(index + 1);
+
+            const preview = document.createElement("span");
+            preview.className = "manager-sort-emoji";
+            preview.textContent = emoji;
+
+            const controls = document.createElement("div");
+            controls.className = "manager-sort-controls";
+
+            const up = document.createElement("button");
+            up.type = "button";
+            up.className = "manager-icon-button";
+            up.dataset.managerAction = moveAction;
+            up.dataset.index = String(index);
+            up.dataset.direction = "-1";
+            up.textContent = "↑";
+            up.title = "Đưa lên";
+            up.disabled = index === 0;
+
+            const down = document.createElement("button");
+            down.type = "button";
+            down.className = "manager-icon-button";
+            down.dataset.managerAction = moveAction;
+            down.dataset.index = String(index);
+            down.dataset.direction = "1";
+            down.textContent = "↓";
+            down.title = "Đưa xuống";
+            down.disabled = index === total - 1;
+
+            const remove = document.createElement("button");
+            remove.type = "button";
+            remove.className = "manager-icon-button danger";
+            remove.dataset.managerAction = removeAction;
+            remove.dataset.emoji = emoji;
+            remove.textContent = "×";
+            remove.title = "Xóa";
+
+            controls.appendChild(up);
+            controls.appendChild(down);
+            controls.appendChild(remove);
+
+            row.appendChild(order);
+            row.appendChild(preview);
+            row.appendChild(controls);
+            return row;
+        }
+
+        renderManagerCombos() {
+            if (!this.managerComboListElement) return;
+
+            this.managerComboListElement.innerHTML = "";
+
+            if (this.reactionCombos.length === 0) {
+                const empty = document.createElement("div");
+                empty.className = "manager-empty";
+                empty.textContent = "Chưa có combo nào.";
+                this.managerComboListElement.appendChild(empty);
+                return;
+            }
+
+            const frag = document.createDocumentFragment();
+            this.reactionCombos.forEach(combo => {
+                const row = document.createElement("div");
+                row.className = "manager-combo-row";
+                row.classList.toggle("editing", combo.id === this.editingComboId);
+
+                const info = document.createElement("div");
+                info.className = "manager-combo-info";
+
+                const name = document.createElement("div");
+                name.className = "manager-combo-name";
+                name.textContent = combo.name;
+
+                const preview = document.createElement("div");
+                preview.className = "manager-combo-preview";
+                preview.textContent = combo.reactions.join(" ");
+
+                info.appendChild(name);
+                info.appendChild(preview);
+
+                const controls = document.createElement("div");
+                controls.className = "manager-combo-controls";
+
+                const edit = document.createElement("button");
+                edit.type = "button";
+                edit.className = "manager-secondary";
+                edit.dataset.managerAction = "edit-combo";
+                edit.dataset.comboId = combo.id;
+                edit.textContent = "Sửa";
+
+                const remove = document.createElement("button");
+                remove.type = "button";
+                remove.className = "manager-secondary danger";
+                remove.dataset.managerAction = "delete-combo";
+                remove.dataset.comboId = combo.id;
+                remove.textContent = "Xóa";
+
+                controls.appendChild(edit);
+                controls.appendChild(remove);
+
+                row.appendChild(info);
+                row.appendChild(controls);
+                frag.appendChild(row);
+            });
+
+            this.managerComboListElement.appendChild(frag);
+        }
+
+        renderManagerEmojiPicker() {
+            if (!this.managerEmojiListElement) return;
+
+            const term = (this.managerSearchInput?.value || "").toLowerCase().trim();
+            const search = term.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            this.managerFilteredEmojis = this.emojiList.filter(em => {
+                if (!search) return true;
+                const name = em.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                return name.includes(search) || em.value.includes(search);
+            });
+            this.managerEmojiPage = 0;
+            this.managerEmojiHasMore = this.managerFilteredEmojis.length > 0;
+            this.managerEmojiListElement.innerHTML = "";
+            this.managerEmojiListElement.scrollTop = 0;
+
+            if (this.managerFilteredEmojis.length === 0) {
+                const empty = document.createElement("div");
+                empty.className = "manager-empty manager-emoji-status";
+                empty.textContent = "Không tìm thấy emoji phù hợp.";
+                this.managerEmojiListElement.appendChild(empty);
+                return;
+            }
+
+            this.loadMoreManagerEmojis();
+        }
+
+        handleManagerEmojiScroll() {
+            if (!this.managerEmojiListElement || this.isManagerEmojiLoading || !this.managerEmojiHasMore) {
+                return;
+            }
+
+            const { scrollTop, scrollHeight, clientHeight } = this.managerEmojiListElement;
+            if (scrollTop + clientHeight >= scrollHeight * 0.75) {
+                this.loadMoreManagerEmojis();
+            }
+        }
+
+        loadMoreManagerEmojis() {
+            if (!this.managerEmojiListElement || this.isManagerEmojiLoading || !this.managerEmojiHasMore) {
+                return;
+            }
+
+            this.isManagerEmojiLoading = true;
+            const startIndex = this.managerEmojiPage * this.managerEmojiItemsPerPage;
+            const endIndex = startIndex + this.managerEmojiItemsPerPage;
+            const list = this.managerFilteredEmojis.slice(startIndex, endIndex);
+
+            if (list.length === 0) {
+                this.managerEmojiHasMore = false;
+                this.isManagerEmojiLoading = false;
+                this.removeManagerEmojiStatus();
+                return;
+            }
+
+            const frag = document.createDocumentFragment();
+            list.forEach(em => {
+                frag.appendChild(this.createManagerEmojiOption(em));
+            });
+
+            this.removeManagerEmojiStatus();
+            this.managerEmojiListElement.appendChild(frag);
+            this.managerEmojiPage++;
+            this.managerEmojiHasMore = endIndex < this.managerFilteredEmojis.length;
+            this.isManagerEmojiLoading = false;
+
+            if (this.managerEmojiHasMore) {
+                const status = document.createElement("div");
+                status.className = "manager-empty manager-emoji-status";
+                status.textContent = "Cuộn xuống để tải thêm emoji...";
+                this.managerEmojiListElement.appendChild(status);
+            }
+        }
+
+        createManagerEmojiOption(em) {
+            const selected = this.activeManagerTab === "favorites"
+                ? this.isFavoriteReaction(em.value)
+                : this.comboDraftReactions.includes(em.value);
+
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "manager-emoji-option";
+            button.classList.toggle("selected", selected);
+            button.dataset.emoji = em.value;
+            button.title = em.name;
+            button.setAttribute("aria-label", selected ? `Bỏ ${em.value}` : `Chọn ${em.value}`);
+
+            const value = document.createElement("span");
+            value.className = "manager-emoji-value";
+            value.textContent = em.value;
+
+            const mark = document.createElement("span");
+            mark.className = "manager-emoji-mark";
+            mark.textContent = selected ? "✓" : "+";
+
+            button.appendChild(value);
+            button.appendChild(mark);
+            return button;
+        }
+
+        updateManagerEmojiOptionState(emoji) {
+            if (!this.managerEmojiListElement || !emoji) return;
+
+            this.managerEmojiListElement
+                .querySelectorAll(".manager-emoji-option")
+                .forEach(button => {
+                    if (button.dataset.emoji !== emoji) return;
+
+                    const selected = this.activeManagerTab === "favorites"
+                        ? this.isFavoriteReaction(emoji)
+                        : this.comboDraftReactions.includes(emoji);
+
+                    button.classList.toggle("selected", selected);
+                    button.setAttribute("aria-label", selected ? `Bỏ ${emoji}` : `Chọn ${emoji}`);
+
+                    const mark = button.querySelector(".manager-emoji-mark");
+                    if (mark) {
+                        mark.textContent = selected ? "✓" : "+";
+                    }
+                });
+        }
+
+        removeManagerEmojiStatus() {
+            this.managerEmojiListElement
+                ?.querySelectorAll(".manager-emoji-status")
+                .forEach(element => element.remove());
         }
 
         renderGroupTabs() {
@@ -742,14 +1580,6 @@
             });
 
             this.emojiListElement.addEventListener('click', (e) => {
-                const favoriteButton = e.target.closest('.favorite-toggle');
-                if (favoriteButton) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    this.toggleFavoriteReaction(favoriteButton.dataset.emoji);
-                    return;
-                }
-
                 const emojiEl = e.target.closest('.emoji');
                 if (emojiEl) {
                     e.preventDefault();
@@ -759,11 +1589,19 @@
             });
 
             panel.addEventListener('click', (e) => {
-                const removeFavorite = e.target.closest('.favorite-remove');
-                if (removeFavorite) {
+                const panelAction = e.target.closest('.panel-action');
+                if (panelAction) {
                     e.preventDefault();
                     e.stopPropagation();
-                    this.toggleFavoriteReaction(removeFavorite.dataset.emoji);
+                    this.openReactionManager(panelAction.dataset.managerTab);
+                    return;
+                }
+
+                const comboChip = e.target.closest('.combo-chip');
+                if (comboChip) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.handleComboReaction(comboChip.dataset.comboId);
                     return;
                 }
 
@@ -831,6 +1669,48 @@
             }
         }
 
+        async handleComboReaction(comboId) {
+            const combo = this.reactionCombos.find(item => item.id === comboId);
+            if (!combo) return;
+
+            try {
+                const [userId, fbDtsg, storyId] = await Promise.all([
+                    this.getUserId(),
+                    this.getFbDtsg(),
+                    this.getStoryId()
+                ]);
+
+                if (!userId || !fbDtsg || !storyId) {
+                    throw new Error('Thiếu tham số bắt buộc');
+                }
+
+                let sent = 0;
+                const failed = [];
+
+                for (const reaction of combo.reactions) {
+                    try {
+                        await this.reactStory(userId, fbDtsg, storyId, reaction);
+                        sent++;
+                        await new Promise(resolve => setTimeout(resolve, 180));
+                    } catch (err) {
+                        failed.push(reaction);
+                        console.error('Gửi reaction trong combo thất bại:', reaction, err);
+                    }
+                }
+
+                if (failed.length === combo.reactions.length) {
+                    this.notifyError(`Không gửi được combo ${combo.name}`);
+                } else if (failed.length > 0) {
+                    this.notifyWarning(`Combo ${combo.name}: gửi ${sent}/${combo.reactions.length}`);
+                } else {
+                    this.notifySuccess(`Đã gửi combo ${combo.name}`);
+                }
+            } catch (err) {
+                this.notifyError(`Không gửi được combo ${combo.name}`);
+                console.error('Gửi combo thất bại:', err);
+            }
+        }
+
         notifySuccess(message) {
             if (window.StoryReactorNotifications?.success) {
                 window.StoryReactorNotifications.success(message);
@@ -844,6 +1724,16 @@
                 window.StoryReactorNotifications.error(message);
             } else if (typeof window.showError === 'function') {
                 window.showError(message);
+            }
+        }
+
+        notifyWarning(message) {
+            if (window.StoryReactorNotifications?.warning) {
+                window.StoryReactorNotifications.warning(message);
+            } else if (typeof window.showWarning === 'function') {
+                window.showWarning(message);
+            } else {
+                this.notifyInfo(message);
             }
         }
 
@@ -955,7 +1845,11 @@
             if (this.container && this.container.parentNode) {
                 this.container.remove();
             }
+            if (this.managerDialog && this.managerDialog.parentNode) {
+                this.managerDialog.remove();
+            }
             document.removeEventListener('click', this.handleDocumentClick);
+            document.removeEventListener('keydown', this.handleDialogKeydown);
             window.removeEventListener('popstate', this.handlePopState);
             window.removeEventListener('hashchange', this.handleHashChange);
             if (this.isHistoryPatched) {
@@ -972,6 +1866,19 @@
             this.searchInput = null;
             this.emojiListElement = null;
             this.favoriteListElement = null;
+            this.comboListElement = null;
+            this.managerDialog = null;
+            this.managerSearchInput = null;
+            this.managerEmojiListElement = null;
+            this.managerFavoriteListElement = null;
+            this.managerComboListElement = null;
+            this.managerSubtitleElement = null;
+            this.comboNameInput = null;
+            this.comboDraftListElement = null;
+            this.managerFilteredEmojis = [];
+            this.managerEmojiPage = 0;
+            this.managerEmojiHasMore = false;
+            this.isManagerEmojiLoading = false;
             this.originalPushState = null;
             this.originalReplaceState = null;
             this.patchedPushState = null;

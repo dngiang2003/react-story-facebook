@@ -18,13 +18,13 @@
 	"content_scripts": [
 		{
 			"matches": ["https://www.facebook.com/*"],
-			"css": ["css/styles.css"],
+			"css": ["styles.css"],
 			"js": ["content.js"]
 		}
 	],
 	"web_accessible_resources": [
 		{
-			"resources": ["js/story.js", "js/notification.js", "data/emoji.json"],
+			"resources": ["story.js", "js/notification.js", "data/emoji.json"],
 			"matches": ["https://www.facebook.com/*"]
 		}
 	]

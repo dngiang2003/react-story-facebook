@@ -82,7 +82,9 @@
             this.handleHashChange = this.handleHashChange.bind(this);
             this.handleDocumentClick = this.handleDocumentClick.bind(this);
             this.handleDialogKeydown = this.handleDialogKeydown.bind(this);
-            this.handleManagerEmojiScroll = this.handleManagerEmojiScroll.bind(this);
+            this.handleManagerEmojiScroll = typeof this.handleManagerEmojiScroll === 'function'
+                ? this.handleManagerEmojiScroll.bind(this)
+                : () => {};
 
             // Throttle functions
             this.throttledAttach = this.throttle(this.attachToFooter.bind(this), 100);

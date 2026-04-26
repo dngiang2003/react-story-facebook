@@ -73,11 +73,10 @@ git clone https://github.com/KimiZK-Dev/Story-Reaction.git
 📦 Story-Reaction
 ├── background.js         # Script nền xử lý sự kiện cài đặt & cấp quyền
 ├── content.js            # Inject script vào story Facebook
+├── story.js              # Logic chính: giao diện, emoji, phản hồi
+├── styles.css            # Giao diện và hiệu ứng
 ├── js/
-│   ├── story.js          # Logic chính: giao diện, emoji, phản hồi
 │   └── notification.js   # Hiển thị thông báo
-├── css/
-│   └── styles.css        # Giao diện và hiệu ứng
 ├── icons/                # Icon tiện ích
 │   ├── icon16.png
 │   ├── icon48.png
@@ -93,7 +92,7 @@ git clone https://github.com/KimiZK-Dev/Story-Reaction.git
 
 * Đảm bảo URL đúng: `https://www.facebook.com/stories/...`
 * Kiểm tra console (DevTools) để xem thông báo lỗi (`F12 → Console`)
-* Facebook có thể thay đổi class hoặc DOM → Cần cập nhật lại `js/story.js`
+* Facebook có thể thay đổi class hoặc DOM → Cần cập nhật lại `story.js`
 
 ### 🚫 Không tải được emoji?
 
@@ -114,7 +113,7 @@ git clone https://github.com/KimiZK-Dev/Story-Reaction.git
 
 ## ⚠️ Lưu Ý Quan Trọng
 
-* 🔄 **Tương thích Facebook**: Nếu Facebook thay đổi DOM, bạn có thể cần chỉnh lại `querySelector` trong `js/story.js`
+* 🔄 **Tương thích Facebook**: Nếu Facebook thay đổi DOM, bạn có thể cần chỉnh lại `querySelector` trong `story.js`
 * 🧠 **AI hỗ trợ cải tiến**: Dự án đã được nâng cấp bằng Grok & Claude (AI) để tăng độ ổn định, thân thiện và tối ưu hiệu năng.
 * 📦 **Nguồn emoji**:
   Emoji được lấy từ [UNPKG](https://unpkg.com/emoji.json/emoji.json), sau đó lưu vào:

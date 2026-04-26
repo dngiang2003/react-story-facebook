@@ -1,8 +1,8 @@
 {
 	"manifest_version": 3,
-    "name": "React Story Facebook V5",
-    "description": "Cải tiến thêm cảm xúc Story Facebook",
-    "version": "1.0.5",
+    "name": "React Story Facebook V6",
+    "description": "Thả cảm xúc Story Facebook, lưu danh sách yêu thích và gửi reaction theo combo.",
+    "version": "1.0.6",
     "icons": {
         "16": "icons/icon16.png",
         "24": "icons/icon24.png",

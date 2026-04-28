@@ -777,6 +777,64 @@
 	gap: 10px;
 }
 
+.manager-filter-row {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.manager-category-tabs {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: 6px;
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding-bottom: 2px;
+	scrollbar-width: thin;
+	scrollbar-color: #ccc transparent;
+}
+
+.manager-category-tabs::-webkit-scrollbar {
+	height: 4px;
+}
+
+.manager-category-tabs::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.manager-category-tabs::-webkit-scrollbar-thumb {
+	background: #ccc;
+	border-radius: 2px;
+}
+
+.manager-category-tab {
+	flex: 0 0 auto;
+	min-width: 38px;
+	height: 38px;
+	border: 1px solid transparent;
+	border-radius: 8px;
+	background: #f7f7f7;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 20px;
+	line-height: 1;
+	transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.manager-category-tab:hover {
+	background: #e8f4fd;
+	border-color: #0078ff;
+	transform: translateY(-1px);
+}
+
+.manager-category-tab.active {
+	background: #0078ff;
+	border-color: #0078ff;
+	color: #ffffff;
+}
+
 .manager-emoji-list {
 	flex: 1;
 	min-height: 0;
@@ -905,6 +963,12 @@
 	.combo-form {
 		grid-template-columns: 1fr;
 	}
+
+	.manager-category-tab {
+		min-width: 36px;
+		height: 36px;
+		font-size: 18px;
+	}
 }
 
 /* Dark mode support */
@@ -934,6 +998,7 @@
 	.manager-secondary,
 	.combo-name-input,
 	.manager-search,
+	.manager-category-tab,
 	.manager-emoji-option {
 		background: #3d3d3d;
 		border-color: #555;
@@ -944,6 +1009,7 @@
 	.combo-chip:hover,
 	.manager-icon-button:hover:not(:disabled),
 	.manager-secondary:hover,
+	.manager-category-tab:hover,
 	.manager-emoji-option:hover {
 		background: #1a4a66;
 		border-color: #0078ff;
@@ -1027,6 +1093,7 @@
 	}
 
 	.manager-tab.active,
+	.manager-category-tab.active,
 	.manager-primary {
 		background: #0078ff;
 		border-color: #0078ff;

@@ -22,6 +22,7 @@
         constructor(options = {}) {
             this.config = options;
             this.emojiList = [];
+            this.emojiCategories = [];
             this.filteredEmojis = [];
             this.container = null;
             this.searchInput = null;
@@ -30,6 +31,7 @@
             this.comboListElement = null;
             this.managerDialog = null;
             this.managerSearchInput = null;
+            this.managerCategoryTabsElement = null;
             this.managerEmojiListElement = null;
             this.managerFavoriteListElement = null;
             this.managerComboListElement = null;
@@ -47,13 +49,15 @@
             this.collator = new Intl.Collator(undefined, { sensitivity: 'base' });
             this.observer = null;
             this.pollingInterval = null;
-            this.cacheKey = 'story_reactor_emoji_cache_v2';
+            this.cacheKey = 'story_reactor_emoji_cache_v3';
             this.favoritesKey = 'story_reactor_favorite_reactions_v1';
             this.combosKey = 'story_reactor_reaction_combos_v1';
             this.favoriteReactions = [];
             this.reactionCombos = [];
             this.comboDraftReactions = [];
             this.editingComboId = null;
+            this.activeEmojiGroup = 'all';
+            this.activeManagerGroup = 'all';
             this.activeManagerTab = 'favorites';
             this.defaultFavoriteReactions = ["❤️", "😂", "😍", "👍", "👏", "🔥", "🎉", "😮"];
             this.maxFavoriteReactions = 24;
@@ -135,22 +139,156 @@
         async loadEmojiData() {
             const cachedData = this.getCachedData();
             if (cachedData) {
-                this.emojiList = cachedData;
-                return;
+                const normalizedCachedData = this.normalizeEmojiData(cachedData);
+                if (normalizedCachedData.length > 0) {
+                    this.emojiList = normalizedCachedData;
+                    return;
+                }
             }
 
             try {
                 const emojiData = this.getInlineEmojiData() || await this.fetchLocalEmojiData();
-                if (!Array.isArray(emojiData)) {
-                    throw new Error('Local emoji data must be an array');
+                const normalizedData = this.normalizeEmojiData(emojiData);
+                if (normalizedData.length === 0) {
+                    throw new Error('Local emoji data is empty or invalid');
                 }
 
-                this.emojiList = emojiData;
+                this.emojiList = normalizedData;
                 this.setCachedData(this.emojiList);
             } catch (err) {
                 console.warn('Failed to load local emoji data:', err);
                 this.emojiList = this.getFallbackEmojiData();
             }
+        }
+
+        normalizeEmojiData(data) {
+            if (Array.isArray(data)) {
+                return this.normalizeFlatEmojiData(data);
+            }
+
+            if (!data || !Array.isArray(data.categories)) {
+                return [];
+            }
+
+            const seen = new Set();
+            const normalized = [];
+            this.emojiCategories = [];
+
+            data.categories.forEach((category, index) => {
+                if (!category || !Array.isArray(category.emojis)) return;
+
+                const fallbackId = `category-${index + 1}`;
+                const id = this.slugify(category.id || category.name || category.label || fallbackId) || fallbackId;
+                const label = this.getCategoryLabel(category, id);
+                const icon = category.icon || category.emojis[0]?.value || this.getCategoryIcon(id);
+                const emojis = [];
+
+                category.emojis.forEach(emoji => {
+                    const item = this.normalizeEmojiRecord(emoji, { id, label, icon });
+                    if (!item || seen.has(item.value)) return;
+
+                    seen.add(item.value);
+                    emojis.push(item);
+                    normalized.push(item);
+                });
+
+                if (emojis.length > 0) {
+                    this.emojiCategories.push({ id, label, icon, emojis });
+                }
+            });
+
+            return normalized;
+        }
+
+        normalizeFlatEmojiData(data) {
+            const seen = new Set();
+            const normalized = [];
+            this.emojiCategories = [];
+
+            data.forEach(emoji => {
+                const groupName = emoji?.group || emoji?.category || 'Emoji';
+                const id = emoji?.categoryId || this.slugify(groupName) || 'emoji';
+                const label = emoji?.group || emoji?.category || this.getCategoryLabel(null, id);
+                const icon = emoji?.categoryIcon || this.getCategoryIcon(id);
+                const item = this.normalizeEmojiRecord(emoji, { id, label, icon });
+                if (!item || seen.has(item.value)) return;
+
+                seen.add(item.value);
+                normalized.push(item);
+            });
+
+            return normalized;
+        }
+
+        normalizeEmojiRecord(emoji, category) {
+            if (!emoji || typeof emoji !== 'object') return null;
+
+            const value = typeof emoji.value === 'string' ? emoji.value.trim() : '';
+            if (!value) return null;
+
+            const name = typeof emoji.name === 'string' && emoji.name.trim()
+                ? emoji.name.trim()
+                : value;
+            const group = category.label || emoji.group || emoji.category || 'Emoji';
+            const categoryId = category.id || emoji.categoryId || this.slugify(group) || 'emoji';
+
+            return {
+                ...emoji,
+                value,
+                name,
+                group,
+                category: group,
+                categoryId,
+                categoryIcon: category.icon || emoji.categoryIcon || value
+            };
+        }
+
+        getCategoryLabel(category, id) {
+            const explicitLabel = category?.label || category?.name || category?.title;
+            if (typeof explicitLabel === 'string' && explicitLabel.trim()) {
+                return explicitLabel.trim();
+            }
+
+            const labels = {
+                people: 'Mặt & người',
+                nature: 'Thiên nhiên',
+                foods: 'Đồ ăn',
+                activity: 'Hoạt động',
+                places: 'Địa điểm',
+                objects: 'Đồ vật',
+                symbols: 'Ký hiệu',
+                flags: 'Cờ'
+            };
+
+            return labels[id] || id
+                .split('-')
+                .filter(Boolean)
+                .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+                .join(' ');
+        }
+
+        getCategoryIcon(id) {
+            const icons = {
+                people: '😀',
+                nature: '🐵',
+                foods: '🍇',
+                activity: '🎃',
+                places: '🌍',
+                objects: '👓',
+                symbols: '🏧',
+                flags: '🏁'
+            };
+
+            return icons[id] || '•';
+        }
+
+        slugify(value) {
+            return String(value || '')
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
         }
 
         getInlineEmojiData() {
@@ -541,12 +679,19 @@
         buildGroupCache() {
             this.groupCache.clear();
             this.emojiList.forEach(e => {
-                const group = e.group || e.category;
-                if (!this.groupCache.has(group)) {
-                    this.groupCache.set(group, []);
+                const id = e.categoryId || this.slugify(e.group || e.category || 'emoji') || 'emoji';
+                if (!this.groupCache.has(id)) {
+                    this.groupCache.set(id, {
+                        id,
+                        label: e.group || e.category || this.getCategoryLabel(null, id),
+                        icon: e.categoryIcon || this.getCategoryIcon(id) || e.value,
+                        emojis: []
+                    });
                 }
-                this.groupCache.get(group).push(e);
+                this.groupCache.get(id).emojis.push(e);
             });
+
+            this.emojiCategories = Array.from(this.groupCache.values());
         }
 
         async setupUI() {
@@ -1126,15 +1271,24 @@
             const picker = document.createElement("section");
             picker.className = "manager-picker";
 
+            const filterRow = document.createElement("div");
+            filterRow.className = "manager-filter-row";
+
             this.managerSearchInput = document.createElement("input");
             this.managerSearchInput.className = "manager-search";
             this.managerSearchInput.type = "text";
             this.managerSearchInput.autocomplete = "off";
 
+            this.managerCategoryTabsElement = document.createElement("div");
+            this.managerCategoryTabsElement.className = "manager-category-tabs";
+            this.managerCategoryTabsElement.setAttribute("aria-label", "Lọc theo loại emoji");
+
             this.managerEmojiListElement = document.createElement("div");
             this.managerEmojiListElement.className = "manager-emoji-list";
 
-            picker.appendChild(this.managerSearchInput);
+            filterRow.appendChild(this.managerSearchInput);
+            filterRow.appendChild(this.managerCategoryTabsElement);
+            picker.appendChild(filterRow);
             picker.appendChild(this.managerEmojiListElement);
 
             body.appendChild(favoritePanel);
@@ -1149,6 +1303,16 @@
 
             overlay.addEventListener("click", (e) => this.handleManagerClick(e));
             this.managerSearchInput.addEventListener("input", () => this.renderManagerEmojiPicker());
+            this.managerCategoryTabsElement.addEventListener("click", (e) => {
+                const target = e.target instanceof Element ? e.target : e.target?.parentElement;
+                const tab = target?.closest(".manager-category-tab");
+                if (!tab) return;
+
+                e.preventDefault();
+                this.activeManagerGroup = tab.dataset.group || "all";
+                this.updateManagerCategoryTabState();
+                this.renderManagerEmojiPicker();
+            });
             this.managerEmojiListElement.addEventListener("scroll", this.handleManagerEmojiScroll);
             this.comboNameInput.addEventListener("keydown", (e) => {
                 if (e.key === "Enter") {
@@ -1158,6 +1322,7 @@
             });
 
             this.managerDialog = overlay;
+            this.renderManagerCategoryTabs();
         }
 
         openReactionManager(tab = "favorites") {
@@ -1183,6 +1348,47 @@
             this.managerDialog.setAttribute("aria-hidden", "true");
             document.removeEventListener("keydown", this.handleDialogKeydown);
             this.openReactionPanel();
+        }
+
+        renderManagerCategoryTabs() {
+            if (!this.managerCategoryTabsElement) return;
+
+            const currentValue = this.groupCache.has(this.activeManagerGroup)
+                ? this.activeManagerGroup
+                : "all";
+            this.activeManagerGroup = currentValue;
+
+            this.managerCategoryTabsElement.innerHTML = "";
+
+            const allTab = document.createElement("button");
+            allTab.type = "button";
+            allTab.className = "manager-category-tab";
+            allTab.dataset.group = "all";
+            allTab.title = "Tất cả";
+            allTab.textContent = "🗂️";
+            this.managerCategoryTabsElement.appendChild(allTab);
+
+            this.groupCache.forEach(group => {
+                const tab = document.createElement("button");
+                tab.type = "button";
+                tab.className = "manager-category-tab";
+                tab.dataset.group = group.id;
+                tab.title = group.label;
+                tab.textContent = group.icon || group.emojis[0]?.value || "•";
+                this.managerCategoryTabsElement.appendChild(tab);
+            });
+
+            this.updateManagerCategoryTabState();
+        }
+
+        updateManagerCategoryTabState() {
+            this.managerCategoryTabsElement
+                ?.querySelectorAll(".manager-category-tab")
+                .forEach(tab => {
+                    const active = (tab.dataset.group || "all") === this.activeManagerGroup;
+                    tab.classList.toggle("active", active);
+                    tab.setAttribute("aria-pressed", active ? "true" : "false");
+                });
         }
 
         openReactionPanel() {
@@ -1223,6 +1429,7 @@
                     : "Tìm emoji để thêm vào combo...";
             }
 
+            this.renderManagerCategoryTabs();
             this.renderManagerFavorites();
             this.renderManagerCombos();
             this.renderComboDraft();
@@ -1458,16 +1665,48 @@
             this.managerComboListElement.appendChild(frag);
         }
 
+        normalizeSearchTerm(term) {
+            return String(term || "")
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "");
+        }
+
+        emojiMatchesSearch(em, search) {
+            if (!search) return true;
+
+            const name = this.normalizeSearchTerm(em.name);
+            const group = this.normalizeSearchTerm(`${em.group || ""} ${em.categoryId || ""}`);
+            return name.includes(search) || group.includes(search) || em.value.includes(search);
+        }
+
+        getEmojiListByGroup(groupId = "all") {
+            if (!groupId || groupId === "all") {
+                return this.emojiList;
+            }
+
+            return this.groupCache.get(groupId)?.emojis || [];
+        }
+
+        getFilteredEmojiList(groupId, term) {
+            const search = this.normalizeSearchTerm(term);
+            return this.getEmojiListByGroup(groupId).filter(em => this.emojiMatchesSearch(em, search));
+        }
+
+        applyPanelEmojiFilter() {
+            this.filteredEmojis = this.getFilteredEmojiList(this.activeEmojiGroup, this.searchInput?.value || "");
+            this.currentPage = 0;
+            this.hasMore = true;
+            this.renderEmojis(this.filteredEmojis, true);
+        }
+
         renderManagerEmojiPicker() {
             if (!this.managerEmojiListElement) return;
 
-            const term = (this.managerSearchInput?.value || "").toLowerCase().trim();
-            const search = term.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            this.managerFilteredEmojis = this.emojiList.filter(em => {
-                if (!search) return true;
-                const name = em.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                return name.includes(search) || em.value.includes(search);
-            });
+            this.managerFilteredEmojis = this.getFilteredEmojiList(
+                this.activeManagerGroup,
+                this.managerSearchInput?.value || ""
+            );
             this.managerEmojiPage = 0;
             this.managerEmojiHasMore = this.managerFilteredEmojis.length > 0;
             this.managerEmojiListElement.innerHTML = "";
@@ -1541,7 +1780,7 @@
             button.className = "manager-emoji-option";
             button.classList.toggle("selected", selected);
             button.dataset.emoji = em.value;
-            button.title = em.name;
+            button.title = `${em.name} - ${em.group}`;
             button.setAttribute("aria-label", selected ? `Bỏ ${em.value}` : `Chọn ${em.value}`);
 
             const value = document.createElement("span");
@@ -1599,19 +1838,20 @@
             const frag = document.createDocumentFragment();
 
             const allTab = document.createElement("div");
-            allTab.className = "emoji-tab active";
+            allTab.className = "emoji-tab";
+            allTab.classList.toggle("active", this.activeEmojiGroup === "all");
             allTab.textContent = "🗂️";
             allTab.title = "Tất cả";
             allTab.dataset.group = "all";
             frag.appendChild(allTab);
 
-            this.groupCache.forEach((group, name) => {
-                const emoji = group[0];
+            this.groupCache.forEach(group => {
                 const tab = document.createElement("div");
                 tab.className = "emoji-tab";
-                tab.textContent = emoji.value;
-                tab.title = name;
-                tab.dataset.group = name;
+                tab.classList.toggle("active", this.activeEmojiGroup === group.id);
+                tab.textContent = group.icon || group.emojis[0]?.value || "•";
+                tab.title = group.label;
+                tab.dataset.group = group.id;
                 frag.appendChild(tab);
             });
 
@@ -1626,21 +1866,11 @@
                 panel.classList.toggle("show");
             });
 
-            const debouncedSearch = this.debounce((term) => {
-                this.filteredEmojis = this.emojiList.filter(em => {
-                    const name = em.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                    const search = term.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                    return name.includes(search) || em.value.includes(search);
-                });
-                this.currentPage = 0;
-                this.hasMore = true;
-                this.renderEmojis(this.filteredEmojis, true);
+            const debouncedSearch = this.debounce(() => {
+                this.applyPanelEmojiFilter();
             }, 200);
 
-            this.searchInput.addEventListener("input", (e) => {
-                const term = e.target.value.toLowerCase();
-                debouncedSearch(term);
-            });
+            this.searchInput.addEventListener("input", () => debouncedSearch());
 
             this.emojiListElement.addEventListener('click', (e) => {
                 const emojiEl = e.target.closest('.emoji');
@@ -1681,13 +1911,8 @@
                     e.preventDefault();
                     e.stopPropagation();
 
-                    this.filteredEmojis = tab.dataset.group === 'all'
-                        ? [...this.emojiList]
-                        : this.groupCache.get(tab.dataset.group) || [];
-
-                    this.currentPage = 0;
-                    this.hasMore = true;
-                    this.renderEmojis(this.filteredEmojis, true);
+                    this.activeEmojiGroup = tab.dataset.group || "all";
+                    this.applyPanelEmojiFilter();
 
                     panel.querySelectorAll(".emoji-tab").forEach(t => t.classList.remove("active"));
                     tab.classList.add("active");
@@ -1932,6 +2157,7 @@
             this.comboListElement = null;
             this.managerDialog = null;
             this.managerSearchInput = null;
+            this.managerCategoryTabsElement = null;
             this.managerEmojiListElement = null;
             this.managerFavoriteListElement = null;
             this.managerComboListElement = null;
@@ -1942,6 +2168,8 @@
             this.managerEmojiPage = 0;
             this.managerEmojiHasMore = false;
             this.isManagerEmojiLoading = false;
+            this.activeEmojiGroup = "all";
+            this.activeManagerGroup = "all";
             this.originalPushState = null;
             this.originalReplaceState = null;
             this.patchedPushState = null;

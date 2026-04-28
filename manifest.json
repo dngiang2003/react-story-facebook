@@ -25,7 +25,7 @@
 	],
 	"web_accessible_resources": [
 		{
-			"resources": ["story.js", "js/notification.js", "data/emoji.json"],
+			"resources": ["story.js", "js/notification.js", "data/emojis.json"],
 			"matches": ["https://www.facebook.com/*"]
 		}
 	]

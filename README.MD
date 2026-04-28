@@ -91,7 +91,7 @@ Story-Reaction
 ├── js/
 │   └── notification.js
 ├── data/
-│   └── emoji.json
+│   └── emojis.json
 ├── icons/
 └── manifest.json
 ```

@@ -88,7 +88,7 @@
             this.handleDialogKeydown = this.handleDialogKeydown.bind(this);
             this.handleManagerEmojiScroll = typeof this.handleManagerEmojiScroll === 'function'
                 ? this.handleManagerEmojiScroll.bind(this)
-                : () => {};
+                : () => { };
 
             // Throttle functions
             this.throttledAttach = this.throttle(this.attachToFooter.bind(this), 100);
@@ -2094,7 +2094,7 @@
                     doc_id: "9697491553691692"
                 });
 
-                const response = await fetch("https://www.facebook.com/api/graphql/", {
+                const response = await fetch("https://web.facebook.com/api/graphql/", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/x-www-form-urlencoded",

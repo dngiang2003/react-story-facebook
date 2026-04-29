@@ -31,7 +31,7 @@ class ContentInjector {
 	let lastUrl = "";
 
 	const isStoryUrl = () => {
-		return window.location.hostname === "www.facebook.com" &&
+		return ["www.facebook.com", "web.facebook.com"].includes(window.location.hostname) &&
 			window.location.pathname.includes("/stories");
 	};
 

@@ -4,29 +4,29 @@
   "description": "Thả cảm xúc Story Facebook, lưu danh sách yêu thích và gửi reaction theo combo.",
   "version": "1.0.6",
   "icons": {
-    "16": "icons/icon16.png",
-    "24": "icons/icon24.png",
-    "32": "icons/icon32.png",
-    "64": "icons/icon64.png",
-    "128": "icons/icon128.png",
-    "256": "icons/icon256.png",
-    "512": "icons/icon512.png"
+    "16": "assets/icons/icon16.png",
+    "24": "assets/icons/icon24.png",
+    "32": "assets/icons/icon32.png",
+    "64": "assets/icons/icon64.png",
+    "128": "assets/icons/icon128.png",
+    "256": "assets/icons/icon256.png",
+    "512": "assets/icons/icon512.png"
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "src/background.js"
   },
   "permissions": ["storage"],
   "host_permissions": ["https://www.facebook.com/*", "https://web.facebook.com/*"],
   "content_scripts": [
     {
       "matches": ["https://www.facebook.com/*", "https://web.facebook.com/*"],
-      "css": ["styles.css"],
-      "js": ["content.js"]
+      "css": ["src/styles.css"],
+      "js": ["src/content.js"]
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["story.js", "js/notification.js", "data/emoji.json"],
+      "resources": ["src/story.js", "src/notification.js", "data/emoji.json"],
       "matches": ["https://www.facebook.com/*", "https://web.facebook.com/*"]
     }
   ]

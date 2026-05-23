@@ -127,9 +127,9 @@ class ContentInjector {
 		document.documentElement.setAttribute(INJECTED_ATTR, "true");
 
 		try {
-			await ContentInjector.injectScript("js/notification.js");
+			await ContentInjector.injectScript("src/notification.js");
 			await injectEmojiData();
-			await ContentInjector.injectScript("story.js", {
+			await ContentInjector.injectScript("src/story.js", {
 				emojiUrl: `${chrome.runtime.getURL(EMOJI_DATA_PATH)}?v=${EMOJI_DATA_VERSION}`,
 				emojiDataId: EMOJI_DATA_ID,
 			});

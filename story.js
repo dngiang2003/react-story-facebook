@@ -2068,6 +2068,15 @@
             return userMatch?.[1] || "";
         }
 
+        getGraphqlEndpoint() {
+            const supportedHosts = new Set(["www.facebook.com", "web.facebook.com"]);
+            const host = supportedHosts.has(window.location.hostname)
+                ? window.location.hostname
+                : "www.facebook.com";
+
+            return `https://${host}/api/graphql`;
+        }
+
         async reactStory(userId, fbDtsg, storyId, reaction, attempt = 0) {
             try {
                 const variables = {
@@ -2094,7 +2103,7 @@
                     doc_id: "9697491553691692"
                 });
 
-                const response = await fetch("https://web.facebook.com/api/graphql/", {
+                const response = await fetch(this.getGraphqlEndpoint(), {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/x-www-form-urlencoded",

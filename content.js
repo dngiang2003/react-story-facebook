@@ -21,7 +21,8 @@ class ContentInjector {
 (() => {
 	const INJECTED_ATTR = "data-story-reactor-bundle-injected";
 	const EMOJI_DATA_ID = "story-reactor-emoji-data";
-	const EMOJI_DATA_PATH = "data/emojis.json";
+	const EMOJI_DATA_PATH = "data/emoji.json";
+	const EMOJI_DATA_VERSION = "categories-v1";
 	const STORAGE_PAGE_SOURCE = "story-reactor-page";
 	const STORAGE_CONTENT_SOURCE = "story-reactor-content";
 	const STORAGE_KEYS = new Set([
@@ -104,8 +105,9 @@ class ContentInjector {
 	const injectEmojiData = async () => {
 		if (document.getElementById(EMOJI_DATA_ID)) return;
 
-		const response = await fetch(chrome.runtime.getURL(EMOJI_DATA_PATH), {
-			cache: "force-cache",
+		const emojiDataUrl = `${chrome.runtime.getURL(EMOJI_DATA_PATH)}?v=${EMOJI_DATA_VERSION}`;
+		const response = await fetch(emojiDataUrl, {
+			cache: "no-cache",
 		});
 
 		if (!response.ok) {
@@ -128,7 +130,7 @@ class ContentInjector {
 			await ContentInjector.injectScript("js/notification.js");
 			await injectEmojiData();
 			await ContentInjector.injectScript("story.js", {
-				emojiUrl: chrome.runtime.getURL(EMOJI_DATA_PATH),
+				emojiUrl: `${chrome.runtime.getURL(EMOJI_DATA_PATH)}?v=${EMOJI_DATA_VERSION}`,
 				emojiDataId: EMOJI_DATA_ID,
 			});
 		} catch (err) {

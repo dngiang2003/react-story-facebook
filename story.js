@@ -49,7 +49,7 @@
             this.collator = new Intl.Collator(undefined, { sensitivity: 'base' });
             this.observer = null;
             this.pollingInterval = null;
-            this.cacheKey = 'story_reactor_emoji_cache_v3';
+            this.cacheKey = 'story_reactor_emoji_cache_v5';
             this.favoritesKey = 'story_reactor_favorite_reactions_v1';
             this.combosKey = 'story_reactor_reaction_combos_v1';
             this.favoriteReactions = [];
@@ -226,9 +226,7 @@
             const value = typeof emoji.value === 'string' ? emoji.value.trim() : '';
             if (!value) return null;
 
-            const name = typeof emoji.name === 'string' && emoji.name.trim()
-                ? emoji.name.trim()
-                : value;
+            const name = this.getEmojiName(emoji, value);
             const group = category.label || emoji.group || emoji.category || 'Emoji';
             const categoryId = category.id || emoji.categoryId || this.slugify(group) || 'emoji';
 
@@ -241,6 +239,39 @@
                 categoryId,
                 categoryIcon: category.icon || emoji.categoryIcon || value
             };
+        }
+
+        getEmojiName(emoji, fallbackValue) {
+            if (typeof emoji.name === 'string' && emoji.name.trim()) {
+                return emoji.name.trim();
+            }
+
+            const sourceUrl = typeof emoji.url === 'string' && emoji.url.trim()
+                ? emoji.url
+                : emoji.image_url;
+            if (typeof sourceUrl !== 'string' || !sourceUrl.trim()) {
+                return fallbackValue;
+            }
+
+            try {
+                const pathname = new URL(sourceUrl, window.location.origin).pathname;
+                const slug = pathname
+                    .split("/")
+                    .filter(Boolean)
+                    .pop()
+                    ?.replace(/\.[a-z0-9]+$/i, "")
+                    .replace(/_[0-9a-f-]+$/i, "");
+
+                if (!slug) return fallbackValue;
+
+                return slug
+                    .split("-")
+                    .filter(Boolean)
+                    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+                    .join(" ");
+            } catch (err) {
+                return fallbackValue;
+            }
         }
 
         getCategoryLabel(category, id) {

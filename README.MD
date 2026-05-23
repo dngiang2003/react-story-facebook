@@ -2,6 +2,8 @@
 
 Tiện ích nhỏ giúp bạn thả emoji/reaction tùy chỉnh trên Facebook Story nhanh hơn, dễ dùng hơn và vui hơn một chút.
 
+Repo hiện tại: **[dngiang2003/react-story-facebook](https://github.com/dngiang2003/react-story-facebook)**
+
 Ở bản **V6 - 1.0.6**, extension có thêm 2 tính năng mới:
 
 - Lưu danh sách **reaction yêu thích**, có thể sắp xếp lại thứ tự.
@@ -26,15 +28,15 @@ Tiện ích nhỏ giúp bạn thả emoji/reaction tùy chỉnh trên Facebook S
 
 ### Popup cơ bản
 
-![Ảnh popup cơ bản](https://s6.imgcdn.dev/YVVv4a.png)
+![Ảnh popup cơ bản](images/popup.png)
 
 ### Cài đặt danh sách yêu thích
 
-![Ảnh popup cài đặt danh sách yêu thích](https://s6.imgcdn.dev/YVVx0w.png)
+![Ảnh popup cài đặt danh sách yêu thích](images/favourite.png)
 
 ### Cài đặt gửi theo combo
 
-![Ảnh popup cài đặt gửi theo combo](https://s6.imgcdn.dev/YVV2dt.png)
+![Ảnh popup cài đặt gửi theo combo](images/combo.png)
 
 ---
 
@@ -51,7 +53,7 @@ Bạn có thể tải source theo 1 trong 2 cách.
 ### Cách 2: Clone bằng Git
 
 ```bash
-git clone https://github.com/KimiZK-Dev/Story-Reaction.git
+git clone https://github.com/dngiang2003/react-story-facebook.git
 ```
 
 Sau đó mở thư mục project vừa clone.
@@ -91,7 +93,11 @@ Story-Reaction
 ├── js/
 │   └── notification.js
 ├── data/
-│   └── emojis.json
+│   └── emoji.json
+├── images/
+│   ├── popup.png
+│   ├── favourite.png
+│   └── combo.png
 ├── icons/
 └── manifest.json
 ```
@@ -128,6 +134,7 @@ Facebook có thể thay đổi DOM bất cứ lúc nào. Khi đó có thể cầ
 
 ## Tác Giả Và Ghi Nhận
 
+- Dự án hiện tại: **[dngiang2003/react-story-facebook](https://github.com/dngiang2003/react-story-facebook)**.
 - Bản cải tiến V5: **[KimiZK-Dev](https://github.com/KimiZK-Dev/Story-Reaction)**.
 - Bản đầu tiên / dự án gốc: **[whoant/react-story-facebook](https://github.com/whoant/react-story-facebook)**.
 

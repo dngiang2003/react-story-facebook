@@ -77,6 +77,10 @@
 	margin-bottom: 6px;
 }
 
+.combo-header {
+	margin-bottom: 10px;
+}
+
 .favorite-title,
 .combo-title {
 	font-size: 12px;
@@ -157,10 +161,17 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	transition: background 0.18s ease, transform 0.18s ease;
+	will-change: transform;
 }
 
 .favorite-reaction:hover {
 	background: #e8f4fd;
+	transform: scale(1.1);
+}
+
+.favorite-reaction:active {
+	transform: scale(0.95);
 }
 
 .favorite-empty {
@@ -181,10 +192,11 @@
 	display: flex;
 	align-items: stretch;
 	gap: 6px;
-	min-height: 42px;
+	min-height: 46px;
 	overflow-x: auto;
 	overflow-y: hidden;
-	padding-bottom: 2px;
+	padding-top: 2px;
+	padding-bottom: 4px;
 	scrollbar-width: thin;
 	scrollbar-color: #ccc transparent;
 }
@@ -200,6 +212,10 @@
 .combo-list::-webkit-scrollbar-thumb {
 	background: #ccc;
 	border-radius: 2px;
+}
+
+.combo-chip:first-child {
+	margin-left: 2px;
 }
 
 .combo-empty {
@@ -234,7 +250,11 @@
 .combo-chip:hover {
 	background: #eef5ff;
 	border-color: #0078ff;
-	transform: translateY(-1px);
+	transform: scale(1.04);
+}
+
+.combo-chip:active {
+	transform: scale(0.97);
 }
 
 .combo-chip-name {
@@ -404,10 +424,15 @@
 	border-radius: 2px;
 }
 
+.emoji-tab:first-child {
+	margin-left: 2px;
+}
+
 .emoji-tab {
 	flex: 0 0 auto;
 	min-width: 40px;
 	height: 40px;
+	margin-bottom: 3px;
 	padding: 8px;
 	background: #f7f7f7;
 	border-radius: 10px;

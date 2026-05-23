@@ -1967,6 +1967,8 @@
 
         async handleReaction(emoji) {
             try {
+                this.notifyInfo(`Đang gửi cảm xúc ${emoji}...`);
+
                 const [userId, fbDtsg, storyId] = await Promise.all([
                     this.getUserId(),
                     this.getFbDtsg(),
@@ -1993,6 +1995,8 @@
             if (!combo) return;
 
             try {
+                this.notifyInfo(`Đang gửi combo ${combo.name}...`);
+
                 const [userId, fbDtsg, storyId] = await Promise.all([
                     this.getUserId(),
                     this.getFbDtsg(),
